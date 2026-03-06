@@ -6,6 +6,10 @@ import {
     leaveRoom,
     startGame,
     getRoomPlayers,
+    generateTest,
+    submitAnswer,
+    getLeaderboard,
+    endGame,
 } from "../controllers/room.controller.ts"
 
 const router = Router()
@@ -16,5 +20,9 @@ router.get("/:roomId", getRoom)
 router.post("/:roomId/leave", leaveRoom)
 router.post("/:roomId/start", startGame)
 router.get("/:roomId/players", getRoomPlayers)
+router.post("/:roomId/generate-test", generateTest)
+router.post("/:roomId/answer", submitAnswer)
+router.get("/:roomId/leaderboard", getLeaderboard)
+router.post("/:roomId/end", endGame)
 
 export default router
