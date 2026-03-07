@@ -1,6 +1,6 @@
 import redis from "../config/redis.ts"
 import { v4 as uuid } from "uuid"
-import { generateQuestions } from "./groq.service.ts"
+import { generateQuestions } from "./gemini.service.ts"
 
 export const createRoomService = async () => {
   const roomId = uuid().slice(0, 6)
