@@ -15,17 +15,19 @@ app.use(express.json())
 app.use("/rooms", roomRoutes)
 const server = http.createServer(app)
 
-const io= new Server(server,{
-  cors:{
-    origin:"*"
+const io = new Server(server, {
+  cors: {
+    origin: "*"
   }
 })
+
+app.set("io", io)
 
 app.get("/", (_, res) => {
   res.send("Quiz Arena Backend Running")
 })
 
-const PORT = 5000 
+const PORT = 5000
 setupScoket(io)
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
