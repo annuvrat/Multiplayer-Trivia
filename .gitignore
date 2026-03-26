@@ -10,6 +10,7 @@ dist
 coverage
 *.lcov
 gcp-key.json
+
 # logs
 logs
 _.log
