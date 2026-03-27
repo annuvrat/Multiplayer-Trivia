@@ -6,7 +6,7 @@ import roomRoutes from "./routes/room.routes"
 import http from 'http'
 import setupScoket from "./websockets/socket"
 dotenv.config()
-
+  
 const app = express()
 
 app.use(cors())
