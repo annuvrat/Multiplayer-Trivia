@@ -32,10 +32,12 @@ export const goToNextQuestion = async (roomId: string, io: Server) => {
         // 3. Update Redis with new index
         await redis.hset(gameKey, "currentQuestionIndex", currentIndex)
 
-        // 4. Emit new question
-        const nextQuestion = questions[currentIndex]
+        // 4. Emit new question (STRIIPPING THE ANSWER FOR SECURITY)
+        const fullQuestion = questions[currentIndex]
+        const { answer, ...safeQuestion } = fullQuestion; // Remove 'answer' key
+
         io.to(roomId).emit("new_question", {
-            question: nextQuestion,
+            question: safeQuestion,
             index: currentIndex,
             totalQuestions: questions.length
         })
