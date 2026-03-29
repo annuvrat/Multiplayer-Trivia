@@ -3,7 +3,7 @@ import { v4 as uuid } from "uuid"
 import { generateQuestions } from "./gemini.service.ts"
 
 export const createRoomService = async () => {
-  const roomId = uuid().slice(0, 6).toLowerCase() // Ensure lowercase
+  const roomId = uuid().slice(0, 6).toLowerCase()
   const roomKey = `room:${roomId}`
 
   await redis.hset(roomKey, {
@@ -77,7 +77,19 @@ export const leaveRoomService = async (roomId: string, userId: string) => {
   return { players }
 }
 
-export const generateTestService = async (roomId: string, topic: string, difficulty: string, questionCount: number) => {
+export const getRoomPlayersService = async (roomId: string) => {
+  const id = roomId.toLowerCase()
+  const playersKey = `room:${id}:players`
+  const players = await redis.smembers(playersKey)
+  return { players }
+}
+
+export const generateTestService = async (
+  roomId: string,
+  topic: string,
+  difficulty: string,
+  questionCount: number,
+) => {
   const id = roomId.toLowerCase()
   const roomKey = `room:${id}`
   const questionsKey = `room:${id}:questions`
@@ -120,7 +132,12 @@ export const startGameService = async (roomId: string, userId: string) => {
   return { message: "Game started", roomId: id, questions }
 }
 
-export const submitAnswerService = async (roomId: string, userId: string, questionIndex: number, selectedOption: number) => {
+export const submitAnswerService = async (
+  roomId: string,
+  userId: string,
+  questionIndex: number,
+  selectedOption: number,
+) => {
   const id = roomId.toLowerCase()
   const gameKey = `room:${id}:game`
   const questionsKey = `room:${id}:questions`

@@ -2,40 +2,73 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer utilities {
-  .animate-float {
-    animation: float 3s ease-in-out infinite;
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f4f6f8;
+  --text-primary: #191c1e;
+  --text-secondary: #5d666d;
+  --accent-primary: #0645ad;
+  --accent-secondary: #008298;
+  --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  --border-color: #e2e8f0;
+}
+
+[data-theme='dark'] {
+  --bg-primary: #121212;
+  --bg-secondary: #1e1e1e;
+  --text-primary: #e1e3e6;
+  --text-secondary: #a1aab3;
+  --accent-primary: #6ab7ff;
+  --accent-secondary: #4dd0e1;
+  --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  --border-color: #333;
+}
+
+body {
+  @apply bg-[var(--bg-primary)] text-[var(--text-primary)] transition-colors duration-300 font-sans;
+}
+
+@layer components {
+  .menti-card {
+    @apply bg-[var(--bg-primary)] rounded-[2rem] border border-[var(--border-color)] shadow-[var(--card-shadow)] p-8;
+  }
+
+  .menti-input {
+    @apply w-full px-6 py-4 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-2xl outline-none focus:ring-2 ring-blue-400 transition-all text-lg font-medium;
+  }
+
+  .menti-button-primary {
+    @apply py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl transition-all active:scale-95 text-lg shadow-lg shadow-blue-500/20 disabled:opacity-50;
+  }
+
+  .menti-button-secondary {
+    @apply py-4 bg-[var(--bg-secondary)] border border-[var(--border-color)] text-[var(--text-primary)] font-bold rounded-2xl hover:bg-[var(--border-color)] transition-all text-lg;
   }
 }
 
 @keyframes float {
-
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-10px);
-  }
-}
-
-@keyframes score-popup {
   0% {
-    transform: scale(0.5);
-    opacity: 0;
+    transform: translate(0, 0) rotate(0deg);
   }
 
-  50% {
-    opacity: 1;
+  33% {
+    transform: translate(10px, -20px) rotate(2deg);
+  }
+
+  66% {
+    transform: translate(-10px, -10px) rotate(-2deg);
   }
 
   100% {
-    transform: translateY(-50px) scale(1.5);
-    opacity: 0;
+    transform: translate(0, 0) rotate(0deg);
   }
 }
 
-.score-popup {
-  animation: score-popup 1s ease-out forwards;
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.bg-hero-pattern {
+  background-image: radial-gradient(circle at 2px 2px, var(--border-color) 1px, transparent 0);
+  background-size: 40px 40px;
 }
