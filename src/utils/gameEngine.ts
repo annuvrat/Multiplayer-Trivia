@@ -2,39 +2,42 @@ import { Server } from "socket.io"
 import redis from "../config/redis.ts"
 import { getLeaderboardService, endGameService } from "../services/room.service.ts"
 
+/**
+ * THE 10-SECOND GAME LOOP:
+ * 1. Push New Question (10s)
+ * 2. Push Mid-Round Leaderboard (5s)
+ * 3. Repeat OR End
+ */
 export const goToNextQuestion = async (roomId: string, io: Server) => {
     const gameKey = `room:${roomId}:game`
     const questionsKey = `room:${roomId}:questions`
 
     try {
-        // 1. Read current state
         const gameState = await redis.hgetall(gameKey)
         if (!gameState || gameState.status !== "playing") return
 
         let currentIndex = Number.parseInt(gameState.currentQuestionIndex || "0")
         currentIndex++
 
-        // 2. Fetch questions to check if we reached the end
         const questionsRaw = await redis.get(questionsKey)
         if (!questionsRaw) return
         const questions = JSON.parse(questionsRaw)
 
+        // GAME IS OVER
         if (currentIndex >= questions.length) {
-            // Game Finished
             const result = await endGameService(roomId)
             await redis.hset(gameKey, "status", "finished")
-
             io.to(roomId).emit("game_ended", result)
             console.log(`Game ended for room ${roomId}`)
             return
         }
 
-        // 3. Update Redis with new index
+        // UPDATE STATE
         await redis.hset(gameKey, "currentQuestionIndex", currentIndex)
 
-        // 4. Emit new question (STRIIPPING THE ANSWER FOR SECURITY)
+        // SEND NEW QUESTION (10s TIMER STARTS NOW)
         const fullQuestion = questions[currentIndex]
-        const { answer, ...safeQuestion } = fullQuestion; // Remove 'answer' key
+        const { answer, ...safeQuestion } = fullQuestion;
 
         io.to(roomId).emit("new_question", {
             question: safeQuestion,
@@ -44,10 +47,26 @@ export const goToNextQuestion = async (roomId: string, io: Server) => {
 
         console.log(`Room ${roomId}: Moving to question ${currentIndex}`)
 
-        // 5. Start next 30s timer recursively
-        setTimeout(() => {
-            goToNextQuestion(roomId, io)
-        }, 30000)
+        // ⏱️ THE 10-SECOND QUESTION TIMER
+        setTimeout(async () => {
+            // STEP 1: Fetch current leaderboard after question ends
+            const leaderboard = await getLeaderboardService(roomId);
+
+            // STEP 2: Tell clients to show the big centered leaderboard!
+            io.to(roomId).emit("show_mid_round_leaderboard", {
+                leaderboard,
+                nextIndex: currentIndex + 1
+            });
+
+            console.log(`Room ${roomId}: Showing Mid-Round Leaderboard`);
+
+            // ⏱️ THE 5-SECOND LEADERBOARD BREAK
+            setTimeout(() => {
+                // Return to this function to go to the next question
+                goToNextQuestion(roomId, io)
+            }, 5000);
+
+        }, 10000);
 
     } catch (error) {
         console.error(`Error in game loop for room ${roomId}:`, error)

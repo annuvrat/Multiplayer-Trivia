@@ -133,9 +133,9 @@ export const generateTest = async (req: Request, res: Response) => {
   }
 }
 
-export const submitAnswer = async (c:any) => {
-  const { roomId } = c.params
-  const { userId, questionIndex, selectedOption } = c.body
+export const submitAnswer = async (req: Request, res: Response) => {
+  const { roomId } = req.params
+  const { userId, questionIndex, selectedOption } = req.body
 
   try {
     const result = await submitAnswerService(
@@ -146,49 +146,49 @@ export const submitAnswer = async (c:any) => {
     )
 
     const leaderboard = await getLeaderboardService(roomId as string)
-    const io: Server = c.app.get("io")
+    const io: Server = req.app.get("io")
 
     // Emit leaderboard update to everyone
-    io.to(roomId).emit("leaderboard_update", { leaderboard })
+    io.to(roomId as string).emit("leaderboard_update", { leaderboard })
 
     // Emit answer update (optional, user answered)
-    io.to(roomId).emit("answer_update", { userId })
+    io.to(roomId as string).emit("answer_update", { userId })
 
     // Emit specific submission details (keep this for individual response)
-    io.to(roomId).emit("answer_submitted", {
+    io.to(roomId as string).emit("answer_submitted", {
       userId,
       isCorrect: result.correct,
       leaderboard,
     })
 
-    c.json(result)
+    res.json(result)
   } catch (error: any) {
-    c.status(400).json({ error: error.message })
+    res.status(400).json({ error: error.message })
   }
 }
 
-export const getLeaderboard = async (c:any) => {
-  const { roomId } = c.params
+export const getLeaderboard = async (req: Request, res: Response) => {
+  const { roomId } = req.params
 
   try {
     const result = await getLeaderboardService(roomId as string)
-    c.json(result)
+    res.json(result)
   } catch (error: any) {
-    c.status(500).json({ error: error.message })
+    res.status(500).json({ error: error.message })
   }
 }
 
-export const endGame = async (c:any) => {
-  const { roomId } = c.params
+export const endGame = async (req: Request, res: Response) => {
+  const { roomId } = req.params
 
   try {
     const result = await endGameService(roomId as string)
 
-    const io = c.app.get("io")
-    io.to(roomId).emit("game_ended", result)
+    const io = req.app.get("io")
+    io.to(roomId as string).emit("game_ended", result)
 
-    c.json(result)
+    res.json(result)
   } catch (error: any) {
-    c.status(500).json({ error: error.message })
+    res.status(500).json({ error: error.message })
   }
 }

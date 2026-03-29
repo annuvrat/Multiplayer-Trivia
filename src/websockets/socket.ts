@@ -1,4 +1,5 @@
 import { Socket, Server } from "socket.io";
+import { leaveRoomService } from "../services/room.service.ts";
 
 type SocketData = {
   roomId?: string
@@ -29,22 +30,24 @@ export default function setupSocket(io: Server) {
 
     })
 
-    socket.on("leave_room", ({ roomId, userId }) => {
-
-      socket.leave(roomId)
+    socket.on("leave_room", async ({ roomId, userId }) => {
+      await leaveRoomService(roomId, userId);
+      socket.leave(roomId);
 
       io.to(roomId).emit("player_left", {
         userId,
         socketId: socket.id
       })
-
     })
 
-    socket.on("disconnect", () => {
+    socket.on("disconnect", async () => {
 
       const { roomId, userId } = socket.data as SocketData
 
       if (roomId && userId) {
+        // 🔥 FIX: Remove player from Redis!
+        await leaveRoomService(roomId, userId);
+
         io.to(roomId).emit("player_left", {
           userId,
           socketId: socket.id
