@@ -10,6 +10,7 @@ import {
   submitAnswerService,
   getLeaderboardService,
   endGameService,
+  restartRoomService,
 } from "../services/room.service.ts"
 import { goToNextQuestion } from "../utils/gameEngine.ts"
 import { Server, Socket } from "socket.io"
@@ -25,13 +26,13 @@ export const createRoom = async (_: Request, res: Response) => {
 
 export const joinRoom = async (req: Request, res: Response) => {
   const { roomId } = req.params
-  const { userId } = req.body
+  const { userId, avatar } = req.body
 
   try {
-    const result = await joinRoomService(roomId as string, userId as string)
+    const result = await joinRoomService(roomId as string, userId as string, avatar as string)
 
     const io = req.app.get("io")
-    io.to(roomId).emit("player_joined", { userId })
+    io.to(roomId).emit("player_joined", { userId, avatar })
 
     res.json(result)
   } catch (error: any) {
@@ -190,5 +191,21 @@ export const endGame = async (req: Request, res: Response) => {
     res.json(result)
   } catch (error: any) {
     res.status(500).json({ error: error.message })
+  }
+}
+
+export const restartRoom = async (req: Request, res: Response) => {
+  const { roomId } = req.params
+  const { userId } = req.body
+
+  try {
+    const result = await restartRoomService(roomId as string, userId)
+
+    const io: Server = req.app.get("io")
+    io.to(roomId as string).emit("return_to_lobby", { roomId })
+
+    res.json(result)
+  } catch (error: any) {
+    res.status(400).json({ error: error.message })
   }
 }

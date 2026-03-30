@@ -12,7 +12,7 @@ export default function setupSocket(io: Server) {
 
     console.log("User connected:", socket.id);
 
-    socket.on("join_room", ({ roomId, userId }) => {
+    socket.on("join_room", ({ roomId, userId, avatar }) => {
 
       if (!roomId || !userId) return
 
@@ -21,10 +21,11 @@ export default function setupSocket(io: Server) {
       socket.data.roomId = roomId
       socket.data.userId = userId
 
-      console.log(`${userId} joined room ${roomId}`)
+      console.log(`${userId} joined room ${roomId} with avatar ${avatar}`)
 
       io.to(roomId).emit("player_joined", {
         userId,
+        avatar,
         socketId: socket.id
       })
 
@@ -56,6 +57,16 @@ export default function setupSocket(io: Server) {
 
       console.log("User disconnected:", socket.id)
     })
+
+    socket.on("send_message", ({ roomId, userId, message, emoji }) => {
+      if (!roomId || !userId) return;
+      io.to(roomId).emit("receive_message", {
+        userId,
+        message,
+        emoji,
+        timestamp: new Date().toISOString()
+      });
+    });
 
   })
 

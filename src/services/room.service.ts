@@ -15,10 +15,11 @@ export const createRoomService = async () => {
   return { roomId }
 }
 
-export const joinRoomService = async (roomId: string, userId: string) => {
+export const joinRoomService = async (roomId: string, userId: string, avatar: string) => {
   const id = roomId.toLowerCase()
   const roomKey = `room:${id}`
   const playersKey = `room:${id}:players`
+  const avatarsKey = `room:${id}:avatars`
 
   const roomExists = await redis.exists(roomKey)
   if (!roomExists) throw new Error("Room not found")
@@ -29,29 +30,60 @@ export const joinRoomService = async (roomId: string, userId: string) => {
   }
 
   await redis.sadd(playersKey, userId)
-  const players = await redis.smembers(playersKey)
+  await redis.hset(avatarsKey, userId, avatar)
 
-  return { roomId: id, players }
+  const players = await redis.smembers(playersKey)
+  const avatars = await redis.hgetall(avatarsKey)
+
+  const fullPlayers = players.map(uid => ({
+    userId: uid,
+    avatar: avatars[uid] || ""
+  }))
+
+  return { roomId: id, players: fullPlayers }
 }
 
 export const getRoomService = async (roomId: string) => {
   const id = roomId.toLowerCase()
   const roomKey = `room:${id}`
   const playersKey = `room:${id}:players`
+  const questionsKey = `room:${id}:questions`
+  const gameKey = `room:${id}:game`
+  const avatarsKey = `room:${id}:avatars`
 
-  const [metadata, players] = await Promise.all([
+  const [metadata, players, avatars, questionsRaw, gameState] = await Promise.all([
     redis.hgetall(roomKey),
     redis.smembers(playersKey),
+    redis.hgetall(avatarsKey),
+    redis.get(questionsKey),
+    redis.hgetall(gameKey),
   ])
 
   if (Object.keys(metadata).length === 0) return null
 
+  const status = metadata.status as "waiting" | "playing" | "finished"
+  let currentQuestion = null
+  let currentQuestionIndex = 0
+
+  if (status === "playing" && questionsRaw && gameState) {
+    const questions = JSON.parse(questionsRaw)
+    currentQuestionIndex = Number.parseInt(gameState.currentQuestionIndex || "0")
+    currentQuestion = questions[currentQuestionIndex]
+  }
+
+  const fullPlayers = players.map(uid => ({
+    userId: uid,
+    avatar: avatars[uid] || ""
+  }))
+
   return {
     roomId: metadata.roomId,
     host: metadata.host,
-    status: metadata.status as "waiting" | "playing" | "finished",
+    status,
     maxPlayers: Number.parseInt(metadata.maxPlayers as string),
-    players,
+    players: fullPlayers,
+    currentQuestion,
+    currentQuestionIndex,
   }
 }
 
@@ -59,12 +91,15 @@ export const leaveRoomService = async (roomId: string, userId: string) => {
   const id = roomId.toLowerCase()
   const roomKey = `room:${id}`
   const playersKey = `room:${id}:players`
+  const avatarsKey = `room:${id}:avatars`
 
   await redis.srem(playersKey, userId)
+  await redis.hdel(avatarsKey, userId)
+
   const players = await redis.smembers(playersKey)
 
   if (players.length === 0) {
-    await redis.del(roomKey, playersKey)
+    await redis.del(roomKey, playersKey, avatarsKey)
     return { players: [] }
   }
 
@@ -80,8 +115,18 @@ export const leaveRoomService = async (roomId: string, userId: string) => {
 export const getRoomPlayersService = async (roomId: string) => {
   const id = roomId.toLowerCase()
   const playersKey = `room:${id}:players`
-  const players = await redis.smembers(playersKey)
-  return { players }
+  const avatarsKey = `room:${id}:avatars`
+  const [players, avatars] = await Promise.all([
+    redis.smembers(playersKey),
+    redis.hgetall(avatarsKey)
+  ])
+
+  const fullPlayers = players.map(uid => ({
+    userId: uid,
+    avatar: avatars[uid] || ""
+  }))
+
+  return { players: fullPlayers }
 }
 
 export const generateTestService = async (
@@ -171,7 +216,11 @@ export const getLeaderboardService = async (roomId: string) => {
 
   const leaderboard = []
   for (let i = 0; i < data.length; i += 2) {
-    leaderboard.push({ user: data[i], score: Number.parseInt(data[i + 1]) })
+    const user = data[i];
+    const score = data[i + 1];
+    if (user && score) {
+      leaderboard.push({ user, score: Number.parseInt(score) })
+    }
   }
   return leaderboard
 }
@@ -189,4 +238,23 @@ export const endGameService = async (roomId: string) => {
     winner: winnersList.length > 1 ? `TIE: ${winnersList.join(" & ")}` : (winnersList[0] || "No one!"),
     leaderboard,
   }
+}
+
+export const restartRoomService = async (roomId: string, userId: string) => {
+  const id = roomId.toLowerCase()
+  const roomKey = `room:${id}`
+  const gameKey = `room:${id}:game`
+  const leaderboardKey = `room:${id}:leaderboard`
+  const answersKey = `room:${id}:answers`
+
+  const host = await redis.hget(roomKey, "host")
+  if (host !== userId) throw new Error("Only host can restart the game")
+
+  // Reset status to waiting
+  await redis.hset(roomKey, "status", "waiting")
+
+  // Clear game state, leaderboard, and answers for a fresh start
+  await redis.del(gameKey, leaderboardKey, answersKey)
+
+  return { message: "Room reset to lobby" }
 }
