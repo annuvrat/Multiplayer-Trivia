@@ -1,4 +1,5 @@
 import React from 'react';
+import { LogOut, Trophy } from 'lucide-react';
 
 interface ResultProps {
     winner: string;
@@ -7,9 +8,11 @@ interface ResultProps {
         score: number;
     }[];
     onRestart: () => void;
+    onLeave: () => void;
+    isHost: boolean;
 }
 
-const Result: React.FC<ResultProps> = ({ winner, leaderboard, onRestart }) => {
+const Result: React.FC<ResultProps> = ({ winner, leaderboard, onRestart, onLeave, isHost }) => {
     return (
         <div className="flex flex-col items-center justify-center min-h-screen p-8 text-center bg-[var(--bg-primary)] relative overflow-hidden">
 
@@ -19,31 +22,46 @@ const Result: React.FC<ResultProps> = ({ winner, leaderboard, onRestart }) => {
                 <div className="absolute bottom-10 right-10 w-60 h-60 bg-purple-500 rounded-full blur-[120px]"></div>
             </div>
 
-            <div className="space-y-24 z-10 animate-in zoom-in-75 duration-700">
+            <div className="space-y-16 z-10 animate-in zoom-in-75 duration-700 w-full max-w-4xl">
                 <div className="space-y-8">
                     <div className="inline-block px-8 py-3 bg-yellow-400 text-black font-black text-xs rounded-full uppercase tracking-widest shadow-xl animate-bounce">Ultimate Arena Hero</div>
-                    <h2 className="text-[10rem] md:text-[14rem] font-black italic leading-tight text-[var(--text-primary)] drop-shadow-2xl uppercase transition-all select-none tracking-tighter">
+                    <h2 className="text-[6rem] md:text-[10rem] font-black italic leading-tight text-[var(--text-primary)] drop-shadow-2xl uppercase transition-all select-none tracking-tighter truncate px-4">
                         {winner}
                     </h2>
                     <p className="text-gray-500 font-bold uppercase tracking-[0.4em] text-sm">Champion of the Arena</p>
                 </div>
 
-                <div className="grid gap-8 justify-center">
+                <div className="flex flex-col items-center gap-6">
+                    {isHost ? (
+                        <button
+                            className="group flex items-center justify-center gap-4 px-20 py-8 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-full hover:scale-105 active:scale-95 transition-all text-3xl shadow-2xl shadow-blue-500/30 w-full md:w-auto"
+                            onClick={onRestart}
+                        >
+                            <Trophy className="group-hover:rotate-12 transition-transform" />
+                            Restart Arena 🏆
+                        </button>
+                    ) : (
+                        <div className="px-10 py-6 bg-blue-600/10 border border-blue-600/30 text-blue-500 rounded-3xl font-black text-xl animate-pulse">
+                            Wait for Host Signal... 📡
+                        </div>
+                    )}
+
                     <button
-                        className="px-20 py-8 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-full hover:scale-110 active:scale-95 transition-all text-3xl shadow-2xl shadow-blue-500/30"
-                        onClick={onRestart}
+                        className="group flex items-center justify-center gap-3 px-12 py-5 bg-[var(--bg-secondary)] border border-[var(--border-color)] text-[var(--text-secondary)] font-bold rounded-2xl hover:bg-red-500 hover:text-white hover:border-red-500 transition-all active:scale-95"
+                        onClick={onLeave}
                     >
-                        Restart Arena 🏆
+                        <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" />
+                        Leave the Arena
                     </button>
-                    <p className="text-xs text-gray-400 font-bold uppercase tracking-[0.2em] italic">Join the next show instantly</p>
                 </div>
 
                 {/* TOP 3 PODIUM SUBTLE LIST */}
-                <div className="flex flex-wrap justify-center gap-10 opacity-60">
+                <div className="flex flex-wrap justify-center gap-10 opacity-60 pt-10">
                     {leaderboard.slice(0, 3).map((u, i) => (
                         <div key={i} className="flex items-center gap-3">
                             <span className="text-2xl font-black text-gray-400">#{i + 1}</span>
                             <span className="text-xl font-bold uppercase text-[var(--text-secondary)]">{u.user}</span>
+                            <span className="text-sm font-black text-blue-500">{u.score} pts</span>
                         </div>
                     ))}
                 </div>

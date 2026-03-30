@@ -3,17 +3,6 @@
 @tailwind utilities;
 
 :root {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f4f6f8;
-  --text-primary: #191c1e;
-  --text-secondary: #5d666d;
-  --accent-primary: #0645ad;
-  --accent-secondary: #008298;
-  --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  --border-color: #e2e8f0;
-}
-
-[data-theme='dark'] {
   --bg-primary: #121212;
   --bg-secondary: #1e1e1e;
   --text-primary: #e1e3e6;
@@ -66,6 +55,26 @@ body {
 
 .animate-float {
   animation: float 6s ease-in-out infinite;
+}
+
+@keyframes bounce-short {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-bounce-short {
+  animation: bounce-short 0.5s ease-in-out;
+}
+
+.glass {
+  @apply bg-white/10 dark:bg-black/20 backdrop-blur-xl border border-white/20 dark:border-white/10;
 }
 
 .bg-hero-pattern {

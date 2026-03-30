@@ -1,4 +1,5 @@
 import React from 'react';
+import { Loader2 } from 'lucide-react';
 
 interface JoinProps {
     roomId: string;
@@ -7,9 +8,29 @@ interface JoinProps {
     setUserId: (name: string) => void;
     onJoin: () => void;
     onCreate: () => void;
+    selectedAvatar: string;
+    setAvatar: (avatar: string) => void;
+    loading: boolean;
 }
 
-const Join: React.FC<JoinProps> = ({ roomId, setRoomId, userId, setUserId, onJoin, onCreate }) => {
+const HERO_ICONS = [
+    "https://api.dicebear.com/9.x/bottts/svg?seed=Felix",
+    "https://api.dicebear.com/9.x/bottts/svg?seed=Aria",
+    "https://api.dicebear.com/9.x/bottts/svg?seed=Zane",
+    "https://api.dicebear.com/9.x/bottts/svg?seed=Luna",
+    "https://api.dicebear.com/9.x/bottts/svg?seed=Milo",
+    "https://api.dicebear.com/9.x/bottts/svg?seed=Nova",
+    "https://api.dicebear.com/9.x/bottts/svg?seed=Jasper",
+    "https://api.dicebear.com/9.x/bottts/svg?seed=Kira",
+    "https://api.dicebear.com/9.x/bottts/svg?seed=Leo",
+    "https://api.dicebear.com/9.x/bottts/svg?seed=Maya",
+    "https://api.dicebear.com/9.x/bottts/svg?seed=Otto",
+    "https://api.dicebear.com/9.x/bottts/svg?seed=Phoebe",
+    "https://api.dicebear.com/9.x/bottts/svg?seed=Rico",
+    "https://api.dicebear.com/9.x/bottts/svg?seed=Sasha"
+];
+
+const Join: React.FC<JoinProps> = ({ roomId, setRoomId, userId, setUserId, onJoin, onCreate, selectedAvatar, setAvatar, loading }) => {
     return (
         <div className="flex flex-col items-center justify-center min-h-screen p-6 relative bg-hero-pattern">
             <div className="w-full max-w-md z-10 space-y-12 text-center animate-in fade-in slide-in-from-bottom-5 duration-700">
@@ -31,7 +52,7 @@ const Join: React.FC<JoinProps> = ({ roomId, setRoomId, userId, setUserId, onJoi
                             />
                         </div>
 
-                        <div className="space-y-2">
+                        <div className="space-y-4 pt-2">
                             <label className="text-xs font-black text-gray-500 uppercase tracking-widest pl-1">Your Name</label>
                             <input
                                 placeholder="Future Winner"
@@ -40,14 +61,30 @@ const Join: React.FC<JoinProps> = ({ roomId, setRoomId, userId, setUserId, onJoi
                                 onChange={e => setUserId(e.target.value)}
                             />
                         </div>
+
+                        <div className="space-y-4">
+                            <label className="text-xs font-black text-gray-500 uppercase tracking-widest pl-1">Choose Hero</label>
+                            <div className="grid grid-cols-7 gap-3">
+                                {HERO_ICONS.map(avatar => (
+                                    <button
+                                        key={avatar}
+                                        onClick={() => setAvatar(avatar)}
+                                        className={`w-12 h-12 flex items-center justify-center p-1 rounded-xl transition-all ${selectedAvatar === avatar ? 'bg-blue-600 scale-110 shadow-lg shadow-blue-600/30 ring-2 ring-blue-400' : 'bg-[var(--bg-secondary)] hover:bg-[var(--border-color)]'}`}
+                                    >
+                                        <img src={avatar} className="w-full h-full" alt="Avatar" />
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                     </div>
 
                     <div className="grid gap-6 pt-4">
                         <button
-                            className="menti-button-primary"
+                            className="menti-button-primary flex items-center justify-center gap-2"
                             onClick={onJoin}
+                            disabled={loading}
                         >
-                            Enter the Arena 🚀
+                            {loading ? <Loader2 className="animate-spin" size={20} /> : "Enter the Arena 🚀"}
                         </button>
                         <div className="flex items-center gap-4 px-2">
                             <div className="h-px flex-1 bg-[var(--border-color)]"></div>
@@ -55,10 +92,11 @@ const Join: React.FC<JoinProps> = ({ roomId, setRoomId, userId, setUserId, onJoi
                             <div className="h-px flex-1 bg-[var(--border-color)]"></div>
                         </div>
                         <button
-                            className="menti-button-secondary hover:text-blue-600 dark:hover:text-blue-400"
+                            className="menti-button-secondary hover:text-blue-600 dark:hover:text-blue-400 flex items-center justify-center gap-2"
                             onClick={onCreate}
+                            disabled={loading}
                         >
-                            Start New Arena ✨
+                            {loading ? <Loader2 className="animate-spin" size={20} /> : "Start New Arena ✨"}
                         </button>
                     </div>
                 </div>
