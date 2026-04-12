@@ -10,6 +10,12 @@ import Leaderboard from './components/Leaderboard'
 import Result from './components/Result'
 import toast, { Toaster } from 'react-hot-toast';
 
+const API_BASE_URL = "https://extrorse-kimber-dulcetly.ngrok-free.dev";
+const HEADERS = {
+  "Content-Type": "application/json",
+  "ngrok-skip-browser-warning": "true"
+};
+
 const HERO_ICONS = [
   "https://api.dicebear.com/9.x/bottts/svg?seed=Felix",
   "https://api.dicebear.com/9.x/bottts/svg?seed=Aria",
@@ -88,9 +94,9 @@ function App() {
     setLoading(true);
     const toastId = toast.loading('Brewing fresh trivia with AI...');
     try {
-      const response = await fetch(`http://localhost:5000/rooms/${roomId.toLowerCase()}/generate-test`, {
+      const response = await fetch(`${API_BASE_URL}/rooms/${roomId.toLowerCase()}/generate-test`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: HEADERS,
         body: JSON.stringify({ topic, difficulty, questionCount: qCount }),
       });
       if (response.ok) {
@@ -108,9 +114,9 @@ function App() {
 
   const handleStartGame = async () => {
     try {
-      const response = await fetch(`http://localhost:5000/rooms/${roomId.toLowerCase()}/start`, {
+      const response = await fetch(`${API_BASE_URL}/rooms/${roomId.toLowerCase()}/start`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: HEADERS,
         body: JSON.stringify({ userId }),
       });
       if (!response.ok) {
@@ -125,9 +131,9 @@ function App() {
   const handleSubmitAnswer = async (choiceIndex: number) => {
     playSound("submit_sound.mp3");
     try {
-      const res = await fetch(`http://localhost:5000/rooms/${roomId.toLowerCase()}/answer`, {
+      const res = await fetch(`${API_BASE_URL}/rooms/${roomId.toLowerCase()}/answer`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: HEADERS,
         body: JSON.stringify({ userId, questionIndex: qIndex, selectedOption: choiceIndex }),
       });
       const data = await res.json();
@@ -145,9 +151,9 @@ function App() {
   const handleRestartRoom = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:5000/rooms/${roomId.toLowerCase()}/restart`, {
+      const response = await fetch(`${API_BASE_URL}/rooms/${roomId.toLowerCase()}/restart`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: HEADERS,
         body: JSON.stringify({ userId }),
       });
       if (!response.ok) {
@@ -163,9 +169,9 @@ function App() {
 
   const handleLeaveRoom = async () => {
     try {
-      await fetch(`http://localhost:5000/rooms/${roomId.toLowerCase()}/leave`, {
+      await fetch(`${API_BASE_URL}/rooms/${roomId.toLowerCase()}/leave`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: HEADERS,
         body: JSON.stringify({ userId }),
       });
       socket.emit("leave_room", { roomId, userId });
@@ -184,9 +190,9 @@ function App() {
     setLoading(true);
     const toastId = toast.loading('Forging your battleground...');
     try {
-      const response = await fetch(`http://localhost:5000/rooms/create`, {
+      const response = await fetch(`${API_BASE_URL}/rooms/create`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: HEADERS,
       });
       const data = await response.json();
       if (response.ok) {
@@ -215,9 +221,9 @@ function App() {
     setLoading(true);
     const toastId = toast.loading('Rushing to the arena...');
     try {
-      const response = await fetch(`http://localhost:5000/rooms/join/${cleanRoomId}`, {
+      const response = await fetch(`${API_BASE_URL}/rooms/join/${cleanRoomId}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: HEADERS,
         body: JSON.stringify({ userId: uId, avatar: av }),
       });
       if (response.ok) {
@@ -226,7 +232,9 @@ function App() {
         console.log(`Auto-joining room ${cleanRoomId} as ${uId}`);
 
         // FETCH ROOM STATUS & CURRENT QUESTION
-        const roomRes = await fetch(`http://localhost:5000/rooms/${cleanRoomId}`);
+        const roomRes = await fetch(`${API_BASE_URL}/rooms/${cleanRoomId}`, {
+          headers: HEADERS
+        });
         if (!roomRes.ok) throw new Error("Could not sync room status");
 
         const roomData = await roomRes.ok ? await roomRes.json() : null;
