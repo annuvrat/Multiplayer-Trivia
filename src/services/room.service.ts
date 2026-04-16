@@ -11,7 +11,7 @@ export const createRoomService = async () => {
     roomId,
     maxPlayers: "10",
   })
-
+  await redis.expire(roomKey, 86400)
   return { roomId }
 }
 
