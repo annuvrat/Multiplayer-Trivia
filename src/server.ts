@@ -3,6 +3,7 @@ import dotenv from "dotenv"
 import cors from "cors"
 import { Server } from "socket.io"
 import roomRoutes from "./routes/room.routes"
+import authRoutes from "./routes/auth.routes"
 import http from 'http'
 import setupScoket from "./websockets/socket"
 dotenv.config()
@@ -13,6 +14,7 @@ app.use(cors())
 app.use(express.json())
 
 app.use("/rooms", roomRoutes)
+app.use("/auth", authRoutes)
 const server = http.createServer(app)
 
 const io = new Server(server, {

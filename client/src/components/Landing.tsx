@@ -1,4 +1,20 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import {
+  getFreshIdToken,
+  onFirebaseAuthStateChange,
+  signInWithGooglePopup,
+  signOutFirebase,
+  type FirebaseGoogleUser,
+} from '../firebase/FireBase';
+
+const BG_MUSIC_SRC = '/sounds/bg_music.mp3';
+/** Background music level (0–1). Kept moderate so it sits under UI. */
+const BG_MUSIC_VOLUME = 0.18;
+const AUTH_USER_STORAGE_KEY = 'quizme-google-user';
+const AUTH_TOKEN_STORAGE_KEY = 'quizme-google-token';
+const BACKEND_AUTH_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 const MARQUEE_ITEMS = [
   'AI Quiz Generation', 'Live Leaderboard', 'Team Mode', 'Power-ups',
@@ -63,12 +79,21 @@ const css = `
   .nav-links { display: flex; align-items: center; gap: 36px; }
   .nav-links a { font-size: 14px; color: var(--muted); text-decoration: none; transition: color 0.2s; }
   .nav-links a:hover { color: var(--bright); }
+  .nav-tools { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .mobile-menu-btn { display: none; background: none; border: none; color: var(--bright); font-size: 22px; cursor: pointer; padding: 4px; line-height: 1; }
   .nav-cta {
     padding: 9px 20px; border-radius: 8px; font-size: 14px; font-weight: 500;
     background: var(--accent1); color: #fff; border: none; cursor: pointer;
     transition: background 0.2s, transform 0.15s; font-family: 'DM Sans', sans-serif;
   }
   .nav-cta:hover { background: #9181f9; transform: translateY(-1px); }
+  .nav-mute {
+    padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 500;
+    background: rgba(255,255,255,0.06); color: var(--bright); border: 1px solid var(--border);
+    cursor: pointer; font-family: 'DM Sans', sans-serif; transition: background 0.2s, border-color 0.2s;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .nav-mute:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.15); }
 
   /* HERO */
   .hero {
@@ -222,6 +247,7 @@ const css = `
   @media (max-width: 900px) {
     .nav { padding: 14px 20px; }
     .nav-links { display: none; }
+    .mobile-menu-btn { display: block; }
     .hero { padding: 100px 20px 60px; }
     .hero-meta { gap: 24px; }
     .features-grid { grid-template-columns: 1fr; }
@@ -235,7 +261,132 @@ const css = `
 `;
 
 const App: React.FC = () => {
+  const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [musicMuted, setMusicMuted] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authUser, setAuthUser] = useState<FirebaseGoogleUser | null>(() => {
+    const raw = localStorage.getItem(AUTH_USER_STORAGE_KEY);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as FirebaseGoogleUser;
+    } catch {
+      return null;
+    }
+  });
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const musicMutedRef = useRef(musicMuted);
+  musicMutedRef.current = musicMuted;
+
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+
+    el.volume = BG_MUSIC_VOLUME;
+
+    if (musicMuted) {
+      el.pause();
+      return;
+    }
+
+    const tryPlay = () => {
+      el.volume = BG_MUSIC_VOLUME;
+      return el.play();
+    };
+
+    let cancelled = false;
+    const unlock = () => {
+      if (cancelled || musicMutedRef.current) return;
+      void tryPlay();
+    };
+
+    void tryPlay().catch(() => {
+      if (cancelled) return;
+      document.addEventListener('pointerdown', unlock, { passive: true });
+      document.addEventListener('keydown', unlock);
+    });
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('pointerdown', unlock);
+      document.removeEventListener('keydown', unlock);
+    };
+  }, [musicMuted]);
+
+  useEffect(() => {
+    const unsub = onFirebaseAuthStateChange((user) => {
+      setAuthUser(user);
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    if (!authUser) {
+      localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+      localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+      return;
+    }
+    localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(authUser));
+    localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, authUser.idToken);
+  }, [authUser]);
+
+  const handleGoogleAuth = async () => {
+    if (authLoading) return;
+    setAuthLoading(true);
+    try {
+      const user = await signInWithGooglePopup();
+      setAuthUser(user);
+
+      // Verify token with backend so upcoming APIs can trust this session.
+      const authRes = await fetch(`${BACKEND_AUTH_BASE_URL}/auth/google/session`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${user.idToken}`,
+        },
+      });
+
+      if (!authRes.ok) {
+        const details = await authRes.json().catch(() => null);
+        throw new Error(details?.error || 'Backend token verification failed');
+      }
+
+      toast.success(`Signed in as ${user.name}`);
+      navigate('/play');
+    } catch (error) {
+      console.error('Google sign in failed:', error);
+      toast.error('Google sign-in failed. Please try again.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    if (authLoading) return;
+    setAuthLoading(true);
+    try {
+      const token = await getFreshIdToken();
+      if (token) {
+        await fetch(`${BACKEND_AUTH_BASE_URL}/auth/google/signout`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }).catch(() => null);
+      }
+      await signOutFirebase();
+      setAuthUser(null);
+      toast.success('Signed out');
+    } catch (error) {
+      console.error('Google sign out failed:', error);
+      toast.error('Could not sign out right now.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const goToPlay = () => {
+    navigate('/play');
+  };
 
   const marqueeContent = [...MARQUEE_ITEMS, ...MARQUEE_ITEMS].map((item, i) => (
     <span key={i} className="marquee-item">
@@ -246,6 +397,7 @@ const App: React.FC = () => {
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: css }} />
+      <audio ref={audioRef} src={BG_MUSIC_SRC} autoPlay playsInline loop preload="auto" hidden />
 
       {/* NAV */}
       <nav className="nav">
@@ -257,15 +409,41 @@ const App: React.FC = () => {
           <a href="#features">Features</a>
           <a href="#how">How it works</a>
           <a href="#arena">Arena</a>
-          <button className="nav-cta">Sign in with Google</button>
+          <button className="nav-cta" onClick={handleGoogleAuth} disabled={authLoading}>
+            {authLoading ? 'Signing in...' : authUser ? `Continue as ${authUser.name.split(' ')[0]}` : 'Sign in with Google'}
+          </button>
         </div>
-        <button
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          style={{ display: 'none', background: 'none', border: 'none', color: 'var(--bright)', fontSize: 22, cursor: 'pointer' }}
-          className="mobile-menu-btn"
-        >
-          {mobileMenuOpen ? '✕' : '☰'}
-        </button>
+        <div className="nav-tools">
+          {authUser ? (
+            <button
+              type="button"
+              className="nav-mute"
+              onClick={handleSignOut}
+              disabled={authLoading}
+              aria-label="Sign out"
+            >
+              {authLoading ? '...' : 'Sign out'}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="nav-mute"
+            onClick={() => setMusicMuted((m) => !m)}
+            aria-pressed={musicMuted}
+            aria-label={musicMuted ? 'Unmute background music' : 'Mute background music'}
+          >
+            {musicMuted ? '🔇 Music off' : '🔊 Mute music'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="mobile-menu-btn"
+            aria-expanded={mobileMenuOpen}
+            aria-label="Toggle menu"
+          >
+            {mobileMenuOpen ? '✕' : '☰'}
+          </button>
+        </div>
       </nav>
 
       {/* HERO */}
@@ -292,23 +470,25 @@ const App: React.FC = () => {
         </p>
 
         <div className="hero-actions">
-          <button className="btn-primary">Play now — it's free</button>
-          <button className="btn-ghost">Join as guest</button>
+          <button className="btn-primary" onClick={handleGoogleAuth} disabled={authLoading}>
+            {authLoading ? 'Signing in...' : authUser ? 'Continue to Arena' : "Play now — it's free"}
+          </button>
+          <button className="btn-ghost" onClick={goToPlay}>Join as guest</button>
         </div>
 
         <div className="hero-meta">
           <div className="meta-item">
-            <div className="meta-num">10K+</div>
+            <div className="meta-num">10+</div>
             <div className="meta-label">Players</div>
           </div>
           <div className="meta-sep" />
           <div className="meta-item">
-            <div className="meta-num">500K+</div>
+            <div className="meta-num">500+</div>
             <div className="meta-label">Quizzes played</div>
           </div>
           <div className="meta-sep" />
           <div className="meta-item">
-            <div className="meta-num">&lt;3s</div>
+            <div className="meta-num">&lt;5s</div>
             <div className="meta-label">To generate</div>
           </div>
         </div>
@@ -383,8 +563,10 @@ const App: React.FC = () => {
         <div className="cta-title">Ready to<br />enter the arena?</div>
         <div className="cta-sub">Free forever. No download. Just pure competitive fun.</div>
         <div className="cta-actions">
-          <button className="btn-primary">Start playing now</button>
-          <button className="btn-ghost">Join as guest</button>
+          <button className="btn-primary" onClick={handleGoogleAuth} disabled={authLoading}>
+            {authLoading ? 'Signing in...' : 'Start playing now'}
+          </button>
+          <button className="btn-ghost" onClick={goToPlay}>Join as guest</button>
         </div>
       </section>
 
