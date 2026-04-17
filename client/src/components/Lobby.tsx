@@ -25,6 +25,7 @@ interface LobbyProps {
     loading: boolean;
     copyInviteLink: () => void;
     onLeave: () => void;
+    canManageRoom: boolean;
 }
 
 const Lobby: React.FC<LobbyProps> = ({
@@ -49,7 +50,8 @@ const Lobby: React.FC<LobbyProps> = ({
     setSoundEnabled,
     loading,
     copyInviteLink,
-    onLeave
+    onLeave,
+    canManageRoom,
 }) => {
     // Generate random positions for players that stay stable across re-renders
     const playerPositions = useMemo(() => {
@@ -167,13 +169,19 @@ const Lobby: React.FC<LobbyProps> = ({
                                 value={topic}
                                 onChange={e => setTopic(e.target.value)}
                                 placeholder="e.g. Marvel Universe..."
+                                disabled={!canManageRoom}
                             />
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-4">
                                 <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-1">Difficulty</label>
-                                <select className="menti-input h-14 appearance-none cursor-pointer bg-white/5 border-white/10" value={difficulty} onChange={e => setDifficulty(e.target.value)}>
+                                <select
+                                    className="menti-input h-14 appearance-none cursor-pointer bg-white/5 border-white/10 disabled:cursor-not-allowed disabled:opacity-70"
+                                    value={difficulty}
+                                    onChange={e => setDifficulty(e.target.value)}
+                                    disabled={!canManageRoom}
+                                >
                                     <option>Easy</option>
                                     <option>Medium</option>
                                     <option>Hard</option>
@@ -181,7 +189,13 @@ const Lobby: React.FC<LobbyProps> = ({
                             </div>
                             <div className="space-y-4">
                                 <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-1">Rounds</label>
-                                <input type="number" className="menti-input h-14 bg-white/5 border-white/10" value={qCount} onChange={e => setQCount(Number(e.target.value))} />
+                                <input
+                                    type="number"
+                                    className="menti-input h-14 bg-white/5 border-white/10 disabled:cursor-not-allowed disabled:opacity-70"
+                                    value={qCount}
+                                    onChange={e => setQCount(Number(e.target.value))}
+                                    disabled={!canManageRoom}
+                                />
                             </div>
                         </div>
 
@@ -210,27 +224,41 @@ const Lobby: React.FC<LobbyProps> = ({
                             <LogOut size={18} />
                             Exit
                         </button>
-                        <button
-                            className="flex-[2] h-16 rounded-2xl flex items-center justify-center gap-3 bg-white/5 border border-white/10 hover:bg-white/10 transition-all font-black text-sm uppercase tracking-widest"
-                            onClick={onGenerate}
-                            disabled={loading}
-                        >
-                            {loading ? <Loader2 className="animate-spin text-blue-500" size={20} /> : <Sparkles size={18} className="text-yellow-500" />}
-                            AI Re-Quiz
-                        </button>
+                        {canManageRoom ? (
+                            <button
+                                className="flex-[2] h-16 rounded-2xl flex items-center justify-center gap-3 bg-white/5 border border-white/10 hover:bg-white/10 transition-all font-black text-sm uppercase tracking-widest"
+                                onClick={onGenerate}
+                                disabled={loading}
+                            >
+                                {loading ? <Loader2 className="animate-spin text-blue-500" size={20} /> : <Sparkles size={18} className="text-yellow-500" />}
+                                AI Re-Quiz
+                            </button>
+                        ) : (
+                            <div className="flex-[2] h-16 rounded-2xl flex items-center justify-center gap-3 bg-white/5 border border-white/10 text-gray-400 font-black text-[11px] uppercase tracking-widest px-3 text-center">
+                                Host is setting quiz
+                            </div>
+                        )}
                     </div>
 
-                    <button
-                        className="menti-button-primary w-full h-20 text-2xl flex items-center justify-center gap-4 shadow-blue-600/20 hover:shadow-blue-600/40 relative overflow-hidden group"
-                        onClick={onStart}
-                    >
-                        <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-transparent opacity-0 group-hover:opacity-10 transition-opacity"></div>
-                        Enter Arena 🎆
-                    </button>
+                    {canManageRoom ? (
+                        <button
+                            className="menti-button-primary w-full h-20 text-2xl flex items-center justify-center gap-4 shadow-blue-600/20 hover:shadow-blue-600/40 relative overflow-hidden group"
+                            onClick={onStart}
+                        >
+                            <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-transparent opacity-0 group-hover:opacity-10 transition-opacity"></div>
+                            Enter Arena 🎆
+                        </button>
+                    ) : (
+                        <div className="w-full h-20 rounded-2xl flex items-center justify-center bg-white/5 border border-white/10 text-gray-400 font-black text-sm uppercase tracking-[0.18em]">
+                            Waiting for host to start
+                        </div>
+                    )}
 
                     <div className="flex items-center justify-center gap-2 pt-2 opacity-50">
                         <Users size={12} className="text-gray-400" />
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] italic">Host Exclusive Controls</span>
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] italic">
+                            {canManageRoom ? "Host Exclusive Controls" : "View-Only Mode"}
+                        </span>
                     </div>
                 </div>
             </div>

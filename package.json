@@ -23,6 +23,7 @@
     "firebase-admin": "^13.8.0",
     "install": "^0.13.0",
     "ioredis": "^5.10.0",
+    "postgres": "^3.4.9",
     "socket.io": "^4.8.3",
     "typescript": "^5",
     "undici-types": "^7.18.2",

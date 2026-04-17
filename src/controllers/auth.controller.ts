@@ -1,12 +1,15 @@
 import { type Response } from "express"
 import { type AuthenticatedRequest } from "../middlewares/auth.middleware.ts"
 import { getFirebaseAdminAuth } from "../config/firebaseAdmin.ts"
+import { persistAuthUserAsync } from "../services/persistence.service.ts"
 
 export function getGoogleSession(req: AuthenticatedRequest, res: Response) {
   if (!req.user) {
     res.status(401).json({ error: "Unauthorized" })
     return
   }
+
+  persistAuthUserAsync(req.user)
 
   res.json({
     message: "Firebase token verified",

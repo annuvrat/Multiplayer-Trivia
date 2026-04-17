@@ -1,14 +1,24 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { socket } from "./socket";
+import {
+  getFreshIdToken,
+  onFirebaseAuthStateChange,
+  signOutFirebase,
+  type FirebaseGoogleUser,
+} from "./firebase/FireBase";
 
-import Join from "./components/Join";
 import Lobby from "./components/Lobby";
 import Quiz from "./components/Quiz";
 import Leaderboard from "./components/Leaderboard";
 import Result from "./components/Result";
 import toast from "react-hot-toast";
+import { Loader2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 const API_BASE_URL = "https://extrorse-kimber-dulcetly.ngrok-free.dev";
+const AUTH_TOKEN_STORAGE_KEY = "quizme-google-token";
+const AUTH_USER_STORAGE_KEY = "quizme-google-user";
+const MATCH_HISTORY_STORAGE_KEY = "quizme-match-history";
 const HEADERS = {
   "Content-Type": "application/json",
   "ngrok-skip-browser-warning": "true",
@@ -36,7 +46,18 @@ interface Player {
   avatar: string;
 }
 
+type MatchHistoryItem = {
+  id: string;
+  roomId: string;
+  winner: string;
+  score: number;
+  position: number | null;
+  isAuthenticated: boolean;
+  playedAt: string;
+};
+
 export default function GameApp() {
+  const navigate = useNavigate();
   const [players, setPlayers] = useState<Player[]>([]);
   const [roomId, setRoomId] = useState("");
   const [userId, setUserId] = useState("");
@@ -59,6 +80,45 @@ export default function GameApp() {
   const [messages, setMessages] = useState<any[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [canManageRoom, setCanManageRoom] = useState(false);
+  const [authUser, setAuthUser] = useState<FirebaseGoogleUser | null>(() => {
+    const raw = localStorage.getItem(AUTH_USER_STORAGE_KEY);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as FirebaseGoogleUser;
+    } catch {
+      return null;
+    }
+  });
+  const [matchHistory, setMatchHistory] = useState<MatchHistoryItem[]>(() => {
+    const raw = localStorage.getItem(MATCH_HISTORY_STORAGE_KEY);
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw) as MatchHistoryItem[];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const isAuthenticated = Boolean(authUser);
+  const profileName = authUser?.name || userId || "Guest Player";
+  const profileAvatar = authUser?.photoURL || avatar;
+  const userIdRef = useRef(userId);
+  const roomIdRef = useRef(roomId);
+  const authRef = useRef(isAuthenticated);
+
+  const getProtectedHeaders = async () => {
+    const freshToken = await getFreshIdToken().catch(() => null);
+    const token = freshToken || localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+    if (!token) return null;
+    if (freshToken) localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, freshToken);
+
+    return {
+      ...HEADERS,
+      Authorization: `Bearer ${token}`,
+    };
+  };
 
   const getPlayerIcon = (name: string) => {
     const player = players.find((p) => p.userId === name);
@@ -91,11 +151,17 @@ export default function GameApp() {
     setLoading(true);
     const toastId = toast.loading("Brewing fresh trivia with AI...");
     try {
+      const protectedHeaders = await getProtectedHeaders();
+      if (!protectedHeaders) {
+        toast.error("Sign in with Google to generate tests.", { id: toastId });
+        return;
+      }
+
       const response = await fetch(
         `${API_BASE_URL}/rooms/${roomId.toLowerCase()}/generate-test`,
         {
           method: "POST",
-          headers: HEADERS,
+          headers: protectedHeaders,
           body: JSON.stringify({ topic, difficulty, questionCount: qCount }),
         },
       );
@@ -114,14 +180,19 @@ export default function GameApp() {
 
   const handleStartGame = async () => {
     try {
+      const protectedHeaders = await getProtectedHeaders();
+      if (!protectedHeaders) {
+        toast.error("Host must sign in with Google to start.");
+        return;
+      }
+
       const response = await fetch(`${API_BASE_URL}/rooms/${roomId.toLowerCase()}/start`, {
         method: "POST",
-        headers: HEADERS,
-        body: JSON.stringify({ userId }),
+        headers: protectedHeaders,
       });
       if (!response.ok) {
         const data = await response.json();
-        alert("Error: " + data.error);
+        toast.error(data.error || "Failed to start game.");
       }
     } catch (err) {
       console.error("Error starting game:", err);
@@ -158,10 +229,15 @@ export default function GameApp() {
   const handleRestartRoom = async () => {
     setLoading(true);
     try {
+      const protectedHeaders = await getProtectedHeaders();
+      if (!protectedHeaders) {
+        toast.error("Host must sign in with Google to restart.");
+        return;
+      }
+
       const response = await fetch(`${API_BASE_URL}/rooms/${roomId.toLowerCase()}/restart`, {
         method: "POST",
-        headers: HEADERS,
-        body: JSON.stringify({ userId }),
+        headers: protectedHeaders,
       });
       if (!response.ok) {
         const data = await response.json();
@@ -187,6 +263,7 @@ export default function GameApp() {
       setRoomId("");
       setPlayers([]);
       setGameState("waiting");
+      setCanManageRoom(false);
       toast("Left the arena. See you later!", { icon: "👋" });
     } catch (err) {
       console.error("Error leaving room:", err);
@@ -197,13 +274,20 @@ export default function GameApp() {
     setLoading(true);
     const toastId = toast.loading("Forging your battleground...");
     try {
+      const protectedHeaders = await getProtectedHeaders();
+      if (!protectedHeaders) {
+        toast.error("Sign in with Google to create a room.", { id: toastId });
+        return;
+      }
+
       const response = await fetch(`${API_BASE_URL}/rooms/create`, {
         method: "POST",
-        headers: HEADERS,
+        headers: protectedHeaders,
       });
       const data = await response.json();
       if (response.ok) {
         setRoomId(data.roomId);
+        setCanManageRoom(true);
         toast.success(`Arena Created! Code: ${data.roomId.toUpperCase()}`, {
           id: toastId,
           duration: 10000,
@@ -245,6 +329,8 @@ export default function GameApp() {
         console.log("Room synced:", roomData);
 
         if (roomData) {
+          const canManage = Boolean(authUser?.uid && roomData.host === authUser.uid);
+          setCanManageRoom(canManage);
           setGameState(roomData.status);
           if (roomData.status === "playing") {
             setCurrentQuestion(roomData.currentQuestion);
@@ -277,6 +363,60 @@ export default function GameApp() {
     }
   };
 
+  const handleDashboardLogout = async () => {
+    if (joined) {
+      await handleLeaveRoom();
+    }
+
+    try {
+      await signOutFirebase();
+    } catch (error) {
+      console.error("Failed to sign out Firebase:", error);
+    }
+    localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+    localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+    setAuthUser(null);
+    toast.success("Logged out");
+    navigate("/", { replace: true });
+  };
+
+  useEffect(() => {
+    const unsub = onFirebaseAuthStateChange((user) => {
+      setAuthUser(user);
+      if (!user) {
+        localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+        localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+        return;
+      }
+
+      localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user));
+      localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, user.idToken);
+    });
+
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated || joined || userId.trim().length > 0) return;
+    setUserId(authUser?.name || "");
+  }, [authUser?.name, isAuthenticated, joined, userId]);
+
+  useEffect(() => {
+    localStorage.setItem(MATCH_HISTORY_STORAGE_KEY, JSON.stringify(matchHistory));
+  }, [matchHistory]);
+
+  useEffect(() => {
+    userIdRef.current = userId;
+  }, [userId]);
+
+  useEffect(() => {
+    roomIdRef.current = roomId;
+  }, [roomId]);
+
+  useEffect(() => {
+    authRef.current = isAuthenticated;
+  }, [isAuthenticated]);
+
   useEffect(() => {
     socket.connect();
     socket.on("player_joined", (data) => {
@@ -304,11 +444,33 @@ export default function GameApp() {
       setGameState("mid-round-leaderboard");
     });
     socket.on("leaderboard_update", (data) => setLeaderboard(data.leaderboard));
+    socket.on("test_generated", (data) => {
+      if (typeof data?.topic === "string") setTopic(data.topic);
+      if (typeof data?.difficulty === "string") setDifficulty(data.difficulty);
+      if (typeof data?.questionCount === "number") setQCount(data.questionCount);
+      toast.success(`Quiz set: ${data?.topic || "Custom topic"}`, { position: "bottom-center" });
+    });
     socket.on("game_ended", (data) => {
       setWinner(data.winner);
       setLeaderboard(data.leaderboard);
       setGameState("finished");
       playSound("end_game_winner.mp3");
+
+      const myEntry = (data.leaderboard || []).find((entry: any) => entry.user === userIdRef.current);
+      const myPosition = (data.leaderboard || []).findIndex((entry: any) => entry.user === userIdRef.current);
+
+      setMatchHistory((prev) => [
+        {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          roomId: roomIdRef.current.toUpperCase(),
+          winner: data.winner || "Unknown",
+          score: myEntry?.score || 0,
+          position: myPosition >= 0 ? myPosition + 1 : null,
+          isAuthenticated: authRef.current,
+          playedAt: new Date().toISOString(),
+        },
+        ...prev.slice(0, 24),
+      ]);
     });
     socket.on("receive_message", (msg) => {
       setMessages((prev) => [...prev.slice(-49), msg]);
@@ -326,6 +488,7 @@ export default function GameApp() {
       socket.off("new_question");
       socket.off("show_mid_round_leaderboard");
       socket.off("leaderboard_update");
+      socket.off("test_generated");
       socket.off("game_ended");
       socket.off("receive_message");
       socket.off("return_to_lobby");
@@ -363,20 +526,156 @@ export default function GameApp() {
     return () => clearInterval(interval);
   }, [gameState, timeLeft]);
 
+  const historyTitle = useMemo(() => {
+    return isAuthenticated ? "Your Match History" : "Guest Match History";
+  }, [isAuthenticated]);
+
   return (
-    <div className="relative min-h-screen font-sans">
+    <div className="relative min-h-screen font-sans bg-slate-950">
+      {!joined ? (
+        <div className="fixed right-4 top-4 z-[60]">
+        <div className="flex items-center gap-3 rounded-xl border border-white/15 bg-slate-900/85 px-3 py-2 shadow-2xl backdrop-blur">
+          <img
+            src={profileAvatar}
+            alt={profileName}
+            className="h-9 w-9 rounded-full border border-white/20 bg-slate-700 object-cover"
+          />
+          <div className="hidden sm:block">
+            <p className="max-w-[11rem] truncate text-sm font-semibold text-slate-100">{profileName}</p>
+            <p className="text-[11px] text-slate-400">{isAuthenticated ? "Authenticated" : "Guest mode"}</p>
+          </div>
+          {isAuthenticated ? (
+            <button
+              type="button"
+              onClick={handleDashboardLogout}
+              className="rounded-md border border-white/15 px-2.5 py-1.5 text-xs font-medium text-slate-200 transition hover:bg-white/10"
+            >
+              Logout
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => navigate(`/go?next=${encodeURIComponent("/auth?next=%2Fplay")}`)}
+              className="rounded-md border border-cyan-300/30 bg-cyan-400/10 px-2.5 py-1.5 text-xs font-medium text-cyan-200 transition hover:bg-cyan-400/20"
+            >
+              Sign in
+            </button>
+          )}
+        </div>
+        </div>
+      ) : null}
+
       {!joined && (
-        <Join
-          roomId={roomId}
-          setRoomId={setRoomId}
-          userId={userId}
-          setUserId={setUserId}
-          onJoin={handleJoin}
-          onCreate={handleCreate}
-          selectedAvatar={avatar}
-          setAvatar={setAvatar}
-          loading={loading}
-        />
+        <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.12),transparent_45%)] px-4 py-20 text-slate-100">
+          <div className="mx-auto grid w-full max-w-6xl gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+            <section className="rounded-2xl border border-white/10 bg-slate-900/80 p-6 shadow-xl backdrop-blur">
+              <p className="text-xs uppercase tracking-[0.18em] text-cyan-300">Play Dashboard</p>
+              <h1 className="mt-2 text-3xl font-semibold">Create or join an arena</h1>
+              <p className="mt-2 text-sm text-slate-400">
+                {isAuthenticated
+                  ? "You can host arenas and generate AI quizzes."
+                  : "Guest mode supports instant join and play. Sign in to host arenas."}
+              </p>
+
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-xs uppercase tracking-widest text-slate-400">Room Code</label>
+                  <input
+                    value={roomId}
+                    onChange={(e) => setRoomId(e.target.value)}
+                    placeholder="e.g. A1B2C3"
+                    className="w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-400"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-xs uppercase tracking-widest text-slate-400">Player Name</label>
+                  <input
+                    value={userId}
+                    onChange={(e) => setUserId(e.target.value)}
+                    placeholder="Your display name"
+                    className="w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-400"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-5">
+                <p className="mb-2 text-xs uppercase tracking-widest text-slate-400">Avatar</p>
+                <div className="grid grid-cols-7 gap-2 sm:grid-cols-10">
+                  {HERO_ICONS.map((icon) => (
+                    <button
+                      key={icon}
+                      type="button"
+                      onClick={() => setAvatar(icon)}
+                      className={`rounded-lg border p-1 transition ${
+                        avatar === icon
+                          ? "border-cyan-400 bg-cyan-400/10"
+                          : "border-white/10 bg-white/5 hover:border-white/25"
+                      }`}
+                    >
+                      <img src={icon} alt="Avatar option" className="h-8 w-8 object-contain" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-7 grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={handleCreate}
+                  disabled={loading}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {loading ? <Loader2 size={16} className="animate-spin" /> : null}
+                  Create New Arena
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleJoin()}
+                  disabled={loading}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/20 bg-white/5 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {loading ? <Loader2 size={16} className="animate-spin" /> : null}
+                  Join Arena
+                </button>
+              </div>
+            </section>
+
+            <aside className="rounded-2xl border border-white/10 bg-slate-900/70 p-6 shadow-xl backdrop-blur">
+              <h2 className="text-lg font-semibold">{historyTitle}</h2>
+              <p className="mt-1 text-xs text-slate-400">
+                Last {Math.min(matchHistory.length, 25)} local records on this device.
+              </p>
+
+              {matchHistory.length === 0 ? (
+                <div className="mt-6 rounded-lg border border-dashed border-white/15 p-4 text-sm text-slate-400">
+                  No matches yet. Join an arena and your recent games will show here.
+                </div>
+              ) : (
+                <div className="mt-4 space-y-2">
+                  {matchHistory.slice(0, 10).map((item) => (
+                    <div
+                      key={item.id}
+                      className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-slate-200"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">Room {item.roomId}</span>
+                        <span className="text-xs text-slate-400">
+                          {new Date(item.playedAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between text-xs text-slate-400">
+                        <span>Winner: {item.winner}</span>
+                        <span>
+                          {item.position ? `#${item.position}` : "Unranked"} • {item.score} pts
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </aside>
+          </div>
+        </div>
       )}
 
       {joined && gameState === "waiting" && (
@@ -403,6 +702,7 @@ export default function GameApp() {
           soundEnabled={soundEnabled}
           setSoundEnabled={setSoundEnabled}
           loading={loading}
+          canManageRoom={canManageRoom}
         />
       )}
 

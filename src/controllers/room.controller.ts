@@ -14,10 +14,16 @@ import {
 } from "../services/room.service.ts"
 import { goToNextQuestion } from "../utils/gameEngine.ts"
 import { Server, Socket } from "socket.io"
+import { persistMatchResultAsync } from "../services/persistence.service.ts"
+import { type AuthenticatedRequest } from "../middlewares/auth.middleware.ts"
 
-export const createRoom = async (_: Request, res: Response) => {
+export const createRoom = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const room = await createRoomService()
+    if (!req.user?.uid) {
+      res.status(401).json({ error: "Unauthorized" })
+      return
+    }
+    const room = await createRoomService(req.user.uid)
     res.json(room)
   } catch (error: any) {
     res.status(500).json({ error: error.message })
@@ -71,12 +77,15 @@ export const leaveRoom = async (req: Request, res: Response) => {
   }
 }
 
-export const startGame = async (req: Request, res: Response) => {
+export const startGame = async (req: AuthenticatedRequest, res: Response) => {
   const { roomId } = req.params
-  const { userId } = req.body
 
   try {
-    const result = await startGameService(roomId as string, userId)
+    if (!req.user?.uid) {
+      res.status(401).json({ error: "Unauthorized" })
+      return
+    }
+    const result = await startGameService(roomId as string, req.user.uid)
 
     const io: Server = req.app.get("io")
 
@@ -113,16 +122,21 @@ export const getRoomPlayers = async (req: Request, res: Response) => {
   }
 }
 
-export const generateTest = async (req: Request, res: Response) => {
+export const generateTest = async (req: AuthenticatedRequest, res: Response) => {
   const { roomId } = req.params
   const { topic, difficulty, questionCount } = req.body
 
   try {
+    if (!req.user?.uid) {
+      res.status(401).json({ error: "Unauthorized" })
+      return
+    }
     const result = await generateTestService(
       roomId as string,
       topic,
       difficulty,
       questionCount,
+      req.user.uid,
     )
 
     const io = req.app.get("io")
@@ -179,11 +193,20 @@ export const getLeaderboard = async (req: Request, res: Response) => {
   }
 }
 
-export const endGame = async (req: Request, res: Response) => {
+export const endGame = async (req: AuthenticatedRequest, res: Response) => {
   const { roomId } = req.params
 
   try {
-    const result = await endGameService(roomId as string)
+    if (!req.user?.uid) {
+      res.status(401).json({ error: "Unauthorized" })
+      return
+    }
+    const result = await endGameService(roomId as string, req.user.uid)
+
+    persistMatchResultAsync({
+      roomId: roomId as string,
+      leaderboard: result.leaderboard,
+    })
 
     const io = req.app.get("io")
     io.to(roomId as string).emit("game_ended", result)
@@ -194,12 +217,15 @@ export const endGame = async (req: Request, res: Response) => {
   }
 }
 
-export const restartRoom = async (req: Request, res: Response) => {
+export const restartRoom = async (req: AuthenticatedRequest, res: Response) => {
   const { roomId } = req.params
-  const { userId } = req.body
 
   try {
-    const result = await restartRoomService(roomId as string, userId)
+    if (!req.user?.uid) {
+      res.status(401).json({ error: "Unauthorized" })
+      return
+    }
+    const result = await restartRoomService(roomId as string, req.user.uid)
 
     const io: Server = req.app.get("io")
     io.to(roomId as string).emit("return_to_lobby", { roomId })

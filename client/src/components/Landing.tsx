@@ -4,7 +4,6 @@ import toast from 'react-hot-toast';
 import {
   getFreshIdToken,
   onFirebaseAuthStateChange,
-  signInWithGooglePopup,
   signOutFirebase,
   type FirebaseGoogleUser,
 } from '../firebase/FireBase';
@@ -330,34 +329,9 @@ const App: React.FC = () => {
     localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, authUser.idToken);
   }, [authUser]);
 
-  const handleGoogleAuth = async () => {
-    if (authLoading) return;
-    setAuthLoading(true);
-    try {
-      const user = await signInWithGooglePopup();
-      setAuthUser(user);
-
-      // Verify token with backend so upcoming APIs can trust this session.
-      const authRes = await fetch(`${BACKEND_AUTH_BASE_URL}/auth/google/session`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${user.idToken}`,
-        },
-      });
-
-      if (!authRes.ok) {
-        const details = await authRes.json().catch(() => null);
-        throw new Error(details?.error || 'Backend token verification failed');
-      }
-
-      toast.success(`Signed in as ${user.name}`);
-      navigate('/play');
-    } catch (error) {
-      console.error('Google sign in failed:', error);
-      toast.error('Google sign-in failed. Please try again.');
-    } finally {
-      setAuthLoading(false);
-    }
+  const goToAuthPortal = () => {
+    const next = encodeURIComponent('/auth?next=%2Fplay');
+    navigate(`/go?next=${next}`);
   };
 
   const handleSignOut = async () => {
@@ -385,7 +359,8 @@ const App: React.FC = () => {
   };
 
   const goToPlay = () => {
-    navigate('/play');
+    const next = encodeURIComponent('/play');
+    navigate(`/go?next=${next}`);
   };
 
   const marqueeContent = [...MARQUEE_ITEMS, ...MARQUEE_ITEMS].map((item, i) => (
@@ -409,8 +384,8 @@ const App: React.FC = () => {
           <a href="#features">Features</a>
           <a href="#how">How it works</a>
           <a href="#arena">Arena</a>
-          <button className="nav-cta" onClick={handleGoogleAuth} disabled={authLoading}>
-            {authLoading ? 'Signing in...' : authUser ? `Continue as ${authUser.name.split(' ')[0]}` : 'Sign in with Google'}
+          <button className="nav-cta" onClick={authUser ? goToPlay : goToAuthPortal} disabled={authLoading}>
+            {authUser ? `Continue as ${authUser.name.split(' ')[0]}` : 'Sign in'}
           </button>
         </div>
         <div className="nav-tools">
@@ -470,8 +445,8 @@ const App: React.FC = () => {
         </p>
 
         <div className="hero-actions">
-          <button className="btn-primary" onClick={handleGoogleAuth} disabled={authLoading}>
-            {authLoading ? 'Signing in...' : authUser ? 'Continue to Arena' : "Play now — it's free"}
+          <button className="btn-primary" onClick={authUser ? goToPlay : goToAuthPortal} disabled={authLoading}>
+            {authUser ? 'Continue to Arena' : "Play now — it's free"}
           </button>
           <button className="btn-ghost" onClick={goToPlay}>Join as guest</button>
         </div>
@@ -563,8 +538,8 @@ const App: React.FC = () => {
         <div className="cta-title">Ready to<br />enter the arena?</div>
         <div className="cta-sub">Free forever. No download. Just pure competitive fun.</div>
         <div className="cta-actions">
-          <button className="btn-primary" onClick={handleGoogleAuth} disabled={authLoading}>
-            {authLoading ? 'Signing in...' : 'Start playing now'}
+          <button className="btn-primary" onClick={authUser ? goToPlay : goToAuthPortal} disabled={authLoading}>
+            {authUser ? 'Continue to Arena' : 'Start playing now'}
           </button>
           <button className="btn-ghost" onClick={goToPlay}>Join as guest</button>
         </div>

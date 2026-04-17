@@ -2,13 +2,14 @@ import redis from "../config/redis.ts"
 import { v4 as uuid } from "uuid"
 import { generateQuestions } from "./gemini.service.ts"
 
-export const createRoomService = async () => {
+export const createRoomService = async (hostUserId: string) => {
   const roomId = uuid().slice(0, 6).toLowerCase()
   const roomKey = `room:${roomId}`
 
   await redis.hset(roomKey, {
     status: "waiting",
     roomId,
+    host: hostUserId,
     maxPlayers: "10",
   })
   await redis.expire(roomKey, 86400)
@@ -134,15 +135,25 @@ export const generateTestService = async (
   topic: string,
   difficulty: string,
   questionCount: number,
+  requesterUserId: string,
 ) => {
   const id = roomId.toLowerCase()
   const roomKey = `room:${id}`
   const questionsKey = `room:${id}:questions`
 
-  if (!(await redis.exists(roomKey))) throw new Error("Room not found")
+  const metadata = await redis.hgetall(roomKey)
+  if (Object.keys(metadata).length === 0) throw new Error("Room not found")
+  if (metadata.host !== requesterUserId) throw new Error("Only host can generate test")
 
   const questions = await generateQuestions(topic, difficulty, questionCount)
-  await redis.set(questionsKey, JSON.stringify(questions))
+  await Promise.all([
+    redis.set(questionsKey, JSON.stringify(questions)),
+    redis.hset(roomKey, {
+      topic,
+      difficulty,
+      questionCount: String(questionCount),
+    }),
+  ])
 
   return { message: "Test generated", questions }
 }
@@ -168,7 +179,11 @@ export const startGameService = async (roomId: string, userId: string) => {
 
   const questions = JSON.parse(questionsRaw)
   await redis.hset(roomKey, "status", "playing")
-  await redis.hset(gameKey, { currentQuestionIndex: 0, status: "playing" })
+  await redis.hset(gameKey, {
+    currentQuestionIndex: 0,
+    status: "playing",
+    startedAt: new Date().toISOString(),
+  })
 
   const pipeline = redis.pipeline()
   for (const player of players) pipeline.zadd(leaderboardKey, 0, player)
@@ -225,9 +240,14 @@ export const getLeaderboardService = async (roomId: string) => {
   return leaderboard
 }
 
-export const endGameService = async (roomId: string) => {
+export const endGameService = async (roomId: string, requesterUserId?: string) => {
   const id = roomId.toLowerCase()
   const roomKey = `room:${id}`
+  const metadata = await redis.hgetall(roomKey)
+
+  if (Object.keys(metadata).length === 0) throw new Error("Room not found")
+  if (requesterUserId && metadata.host !== requesterUserId) throw new Error("Only host can end the game")
+
   const leaderboard = await getLeaderboardService(id)
 
   await redis.hset(roomKey, "status", "finished")

@@ -1,6 +1,7 @@
 import { Server } from "socket.io"
 import redis from "../config/redis.ts"
 import { getLeaderboardService, endGameService } from "../services/room.service.ts"
+import { persistMatchResultAsync } from "../services/persistence.service.ts"
 
 /**
  * THE 10-SECOND GAME LOOP:
@@ -26,6 +27,10 @@ export const goToNextQuestion = async (roomId: string, io: Server) => {
         // GAME IS OVER
         if (currentIndex >= questions.length) {
             const result = await endGameService(roomId)
+            persistMatchResultAsync({
+                roomId,
+                leaderboard: result.leaderboard,
+            })
             await redis.hset(gameKey, "status", "finished")
             io.to(roomId).emit("game_ended", result)
             console.log(`Game ended for room ${roomId}`)
