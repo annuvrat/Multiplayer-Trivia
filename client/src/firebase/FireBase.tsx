@@ -8,13 +8,13 @@ import {
 } from "firebase/auth";
 
 const firebaseConfig = {
-    apiKey: "AIzaSyC-vCyQVrl4pyCgIDSvEOBFEqxtIWRH6ro",
-    authDomain: "quizme-1db3a.firebaseapp.com",
-    projectId: "quizme-1db3a",
-    storageBucket: "quizme-1db3a.firebasestorage.app",
-    messagingSenderId: "575346593953",
-    appId: "1:575346593953:web:92f58dd58473d900fce0e0",
-    measurementId: "G-KVN9DZD38X"
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
   };
   
 
