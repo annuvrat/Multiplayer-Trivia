@@ -1,6 +1,7 @@
 import redis from "../config/redis.ts"
 import { v4 as uuid } from "uuid"
 import { generateQuestions } from "./gemini.service.ts"
+import { refreshRoomTtl } from "./roomTtl.ts"
 
 export const createRoomService = async (hostUserId: string) => {
   const roomId = uuid().slice(0, 6).toLowerCase()
@@ -12,7 +13,7 @@ export const createRoomService = async (hostUserId: string) => {
     host: hostUserId,
     maxPlayers: "10",
   })
-  await redis.expire(roomKey, 86400)
+  await refreshRoomTtl(roomId)
   return { roomId }
 }
 
@@ -41,6 +42,7 @@ export const joinRoomService = async (roomId: string, userId: string, avatar: st
     avatar: avatars[uid] || ""
   }))
 
+  await refreshRoomTtl(id)
   return { roomId: id, players: fullPlayers }
 }
 
@@ -110,6 +112,7 @@ export const leaveRoomService = async (roomId: string, userId: string) => {
     await redis.hset(roomKey, "host", nextHost as string)
   }
 
+  await refreshRoomTtl(id)
   return { players }
 }
 
@@ -154,6 +157,7 @@ export const generateTestService = async (
       questionCount: String(questionCount),
     }),
   ])
+  await refreshRoomTtl(id)
 
   return { message: "Test generated", questions }
 }
@@ -188,6 +192,7 @@ export const startGameService = async (roomId: string, userId: string) => {
   const pipeline = redis.pipeline()
   for (const player of players) pipeline.zadd(leaderboardKey, 0, player)
   await pipeline.exec()
+  await refreshRoomTtl(id)
 
   return { message: "Game started", roomId: id, questions }
 }
@@ -220,6 +225,7 @@ export const submitAnswerService = async (
 
   if (isCorrect) await redis.zincrby(leaderboardKey, 10, userId)
   await redis.hset(answersKey, `${userId}:${questionIndex}`, selectedOption)
+  await refreshRoomTtl(id)
 
   return { correct: isCorrect, scoreChange: isCorrect ? 10 : 0, correctAnswer: question.answer || 0 }
 }
@@ -251,6 +257,7 @@ export const endGameService = async (roomId: string, requesterUserId?: string) =
   const leaderboard = await getLeaderboardService(id)
 
   await redis.hset(roomKey, "status", "finished")
+  await refreshRoomTtl(id)
   const topScore = leaderboard[0]?.score || 0
   const winnersList = leaderboard.filter(p => p.score === topScore && topScore > 0).map(p => p.user)
 
@@ -275,6 +282,7 @@ export const restartRoomService = async (roomId: string, userId: string) => {
 
   // Clear game state, leaderboard, and answers for a fresh start
   await redis.del(gameKey, leaderboardKey, answersKey)
+  await refreshRoomTtl(id)
 
   return { message: "Room reset to lobby" }
 }

@@ -61,14 +61,24 @@ export function persistMatchResultAsync(params: {
     const roomKey = `room:${roomId}`
     const gameKey = `room:${roomId}:game`
 
-    const [roomMeta, gameMeta] = await Promise.all([
+    const questionsKey = `room:${roomId}:questions`
+    const [roomMeta, gameMeta, questionsRaw] = await Promise.all([
       redis.hgetall(roomKey),
       redis.hgetall(gameKey),
+      redis.get(questionsKey),
     ])
 
     const topic = roomMeta.topic || null
     const difficulty = roomMeta.difficulty || null
     const questionCount = roomMeta.questionCount ? Number.parseInt(roomMeta.questionCount) : null
+    let quizSnapshot: unknown = null
+    if (questionsRaw) {
+      try {
+        quizSnapshot = JSON.parse(questionsRaw)
+      } catch {
+        quizSnapshot = null
+      }
+    }
     const startedAt = gameMeta.startedAt ? new Date(gameMeta.startedAt) : new Date()
     const endedAt = new Date()
 
@@ -101,6 +111,7 @@ export function persistMatchResultAsync(params: {
           topic,
           difficulty,
           question_count,
+          quiz_snapshot,
           started_at,
           ended_at,
           winner_id
@@ -110,6 +121,7 @@ export function persistMatchResultAsync(params: {
           ${topic},
           ${difficulty},
           ${questionCount},
+          ${quizSnapshot === null ? null : tx.json(quizSnapshot as Parameters<typeof tx.json>[0])},
           ${startedAt},
           ${endedAt},
           ${winnerId}

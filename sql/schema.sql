@@ -19,10 +19,14 @@ CREATE TABLE IF NOT EXISTS matches (
   topic TEXT,
   difficulty TEXT,
   question_count INT,
+  quiz_snapshot JSONB,
   started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   ended_at TIMESTAMPTZ,
   winner_id UUID REFERENCES users(id) ON DELETE SET NULL
 );
+
+-- If table existed before quiz_snapshot, add column (safe to rerun).
+ALTER TABLE matches ADD COLUMN IF NOT EXISTS quiz_snapshot JSONB;
 
 CREATE TABLE IF NOT EXISTS match_participants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

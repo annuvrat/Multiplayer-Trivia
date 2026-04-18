@@ -11,11 +11,13 @@ import Lobby from "./components/Lobby";
 import Quiz from "./components/Quiz";
 import Leaderboard from "./components/Leaderboard";
 import Result from "./components/Result";
+import MatchReplayModal from "./components/MatchReplayModal";
 import toast from "react-hot-toast";
 import { Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { parseQuizSnapshot, type ReplayQuestion } from "./utils/quizSnapshot";
 
-const API_BASE_URL = "https://extrorse-kimber-dulcetly.ngrok-free.dev";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 const AUTH_TOKEN_STORAGE_KEY = "quizme-google-token";
 const AUTH_USER_STORAGE_KEY = "quizme-google-user";
 const MATCH_HISTORY_STORAGE_KEY = "quizme-match-history";
@@ -54,6 +56,13 @@ type MatchHistoryItem = {
   position: number | null;
   isAuthenticated: boolean;
   playedAt: string;
+  topic?: string | null;
+  difficulty?: string | null;
+  questionCount?: number | null;
+  hasQuizSnapshot?: boolean;
+  /** Raw quiz JSON from DB (server rows only). */
+  quizSnapshot?: unknown;
+  source?: "local" | "server";
 };
 
 export default function GameApp() {
@@ -100,6 +109,12 @@ export default function GameApp() {
       return [];
     }
   });
+  const [serverMatchHistory, setServerMatchHistory] = useState<MatchHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [replaySession, setReplaySession] = useState<{
+    item: MatchHistoryItem;
+    questions: ReplayQuestion[];
+  } | null>(null);
 
   const isAuthenticated = Boolean(authUser);
   const profileName = authUser?.name || userId || "Guest Player";
@@ -402,8 +417,64 @@ export default function GameApp() {
   }, [authUser?.name, isAuthenticated, joined, userId]);
 
   useEffect(() => {
+    if (isAuthenticated) return;
     localStorage.setItem(MATCH_HISTORY_STORAGE_KEY, JSON.stringify(matchHistory));
-  }, [matchHistory]);
+  }, [matchHistory, isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated || joined) return;
+    let cancelled = false;
+    setHistoryLoading(true);
+    void (async () => {
+      const headers = await getProtectedHeaders();
+      if (!headers || cancelled) {
+        if (!cancelled) setHistoryLoading(false);
+        return;
+      }
+      try {
+        const res = await fetch(`${API_BASE_URL}/auth/me/matches`, { headers });
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          matches?: Array<{
+            id: string;
+            room_id: string;
+            topic: string | null;
+            difficulty: string | null;
+            question_count: number | null;
+            quiz_snapshot: unknown;
+            ended_at: string | null;
+            started_at: string;
+            score: number;
+            position: number | null;
+            winner_name: string | null;
+          }>;
+        };
+        const rows: MatchHistoryItem[] = (data.matches || []).map((m) => ({
+          id: m.id,
+          roomId: (m.room_id || "").toUpperCase(),
+          winner: m.winner_name || "—",
+          score: m.score ?? 0,
+          position: m.position,
+          isAuthenticated: true,
+          playedAt: m.ended_at || m.started_at,
+          topic: m.topic,
+          difficulty: m.difficulty,
+          questionCount: m.question_count,
+          hasQuizSnapshot: m.quiz_snapshot != null,
+          quizSnapshot: m.quiz_snapshot,
+          source: "server",
+        }));
+        if (!cancelled) setServerMatchHistory(rows);
+      } catch {
+        /* ignore */
+      } finally {
+        if (!cancelled) setHistoryLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, joined, authUser?.uid]);
 
   useEffect(() => {
     userIdRef.current = userId;
@@ -459,18 +530,21 @@ export default function GameApp() {
       const myEntry = (data.leaderboard || []).find((entry: any) => entry.user === userIdRef.current);
       const myPosition = (data.leaderboard || []).findIndex((entry: any) => entry.user === userIdRef.current);
 
-      setMatchHistory((prev) => [
-        {
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          roomId: roomIdRef.current.toUpperCase(),
-          winner: data.winner || "Unknown",
-          score: myEntry?.score || 0,
-          position: myPosition >= 0 ? myPosition + 1 : null,
-          isAuthenticated: authRef.current,
-          playedAt: new Date().toISOString(),
-        },
-        ...prev.slice(0, 24),
-      ]);
+      if (!authRef.current) {
+        setMatchHistory((prev) => [
+          {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            roomId: roomIdRef.current.toUpperCase(),
+            winner: data.winner || "Unknown",
+            score: myEntry?.score || 0,
+            position: myPosition >= 0 ? myPosition + 1 : null,
+            isAuthenticated: false,
+            playedAt: new Date().toISOString(),
+            source: "local",
+          },
+          ...prev.slice(0, 24),
+        ]);
+      }
     });
     socket.on("receive_message", (msg) => {
       setMessages((prev) => [...prev.slice(-49), msg]);
@@ -529,6 +603,17 @@ export default function GameApp() {
   const historyTitle = useMemo(() => {
     return isAuthenticated ? "Your Match History" : "Guest Match History";
   }, [isAuthenticated]);
+
+  const dashboardHistory = isAuthenticated ? serverMatchHistory : matchHistory;
+
+  const openReplay = (item: MatchHistoryItem) => {
+    const questions = parseQuizSnapshot(item.quizSnapshot);
+    if (!questions?.length) {
+      toast.error("Quiz data unavailable for this match.");
+      return;
+    }
+    setReplaySession({ item, questions });
+  };
 
   return (
     <div className="relative min-h-screen font-sans bg-slate-950">
@@ -643,16 +728,20 @@ export default function GameApp() {
             <aside className="rounded-2xl border border-white/10 bg-slate-900/70 p-6 shadow-xl backdrop-blur">
               <h2 className="text-lg font-semibold">{historyTitle}</h2>
               <p className="mt-1 text-xs text-slate-400">
-                Last {Math.min(matchHistory.length, 25)} local records on this device.
+                {isAuthenticated
+                  ? "Synced from your account — open Replay to practice the saved questions."
+                  : `Last ${Math.min(matchHistory.length, 25)} records on this device only.`}
               </p>
 
-              {matchHistory.length === 0 ? (
+              {historyLoading && isAuthenticated ? (
+                <div className="mt-6 text-sm text-slate-500">Loading history…</div>
+              ) : dashboardHistory.length === 0 ? (
                 <div className="mt-6 rounded-lg border border-dashed border-white/15 p-4 text-sm text-slate-400">
-                  No matches yet. Join an arena and your recent games will show here.
+                  No matches yet. Finish a game and your results will show here.
                 </div>
               ) : (
                 <div className="mt-4 space-y-2">
-                  {matchHistory.slice(0, 10).map((item) => (
+                  {dashboardHistory.slice(0, 10).map((item) => (
                     <div
                       key={item.id}
                       className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-slate-200"
@@ -663,12 +752,28 @@ export default function GameApp() {
                           {new Date(item.playedAt).toLocaleDateString()}
                         </span>
                       </div>
+                      {(item.topic || item.difficulty) && (
+                        <div className="mt-1 text-xs text-cyan-200/90">
+                          {item.topic || "Custom"}
+                          {item.difficulty ? ` · ${item.difficulty}` : ""}
+                          {item.questionCount != null ? ` · ${item.questionCount} Q` : ""}
+                        </div>
+                      )}
                       <div className="mt-1 flex items-center justify-between text-xs text-slate-400">
                         <span>Winner: {item.winner}</span>
                         <span>
                           {item.position ? `#${item.position}` : "Unranked"} • {item.score} pts
                         </span>
                       </div>
+                      {item.hasQuizSnapshot && item.source === "server" ? (
+                        <button
+                          type="button"
+                          onClick={() => openReplay(item)}
+                          className="mt-2 w-full rounded-lg border border-cyan-500/35 bg-cyan-500/10 py-2 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-500/20"
+                        >
+                          Replay quiz
+                        </button>
+                      ) : null}
                     </div>
                   ))}
                 </div>
@@ -725,9 +830,20 @@ export default function GameApp() {
           leaderboard={leaderboard}
           onRestart={handleRestartRoom}
           onLeave={handleLeaveRoom}
-          isHost={players[0]?.userId === userId}
+          isHost={canManageRoom}
         />
       )}
+
+      {replaySession ? (
+        <MatchReplayModal
+          open
+          onClose={() => setReplaySession(null)}
+          roomLabel={replaySession.item.roomId}
+          topic={replaySession.item.topic}
+          difficulty={replaySession.item.difficulty}
+          questions={replaySession.questions}
+        />
+      ) : null}
     </div>
   );
 }
