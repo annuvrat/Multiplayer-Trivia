@@ -13,6 +13,7 @@ const roomKeyIds = (roomId: string) => {
     `room:${id}:game`,
     `room:${id}:leaderboard`,
     `room:${id}:answers`,
+    `room:${id}:team_assign`,
   ]
 }
 

@@ -1,4 +1,5 @@
 import { type Request, type Response } from "express"
+import redis from "../config/redis.ts"
 import {
   createRoomService,
   joinRoomService,
@@ -11,9 +12,15 @@ import {
   getLeaderboardService,
   endGameService,
   restartRoomService,
+  setPlayerTeamService,
+  setTeamNamesService,
+  startLobbyCountdownService,
+  emitTeamsToRoom,
 } from "../services/room.service.ts"
-import { goToNextQuestion } from "../utils/gameEngine.ts"
-import { Server, Socket } from "socket.io"
+import { broadcastGameStart } from "../utils/gameBroadcast.ts"
+import { scheduleLobbyCountdown, cancelLobbyCountdown } from "../services/countdown.service.ts"
+import { afterPlayerLeftRoom } from "../services/lobbyNotify.ts"
+import type { Server } from "socket.io"
 import { persistMatchResultAsync } from "../services/persistence.service.ts"
 import { type AuthenticatedRequest } from "../middlewares/auth.middleware.ts"
 
@@ -23,7 +30,8 @@ export const createRoom = async (req: AuthenticatedRequest, res: Response) => {
       res.status(401).json({ error: "Unauthorized" })
       return
     }
-    const room = await createRoomService(req.user.uid)
+    const gameMode = (req.body as { gameMode?: string } | undefined)?.gameMode
+    const room = await createRoomService(req.user.uid, gameMode)
     res.json(room)
   } catch (error: any) {
     res.status(500).json({ error: error.message })
@@ -38,7 +46,8 @@ export const joinRoom = async (req: Request, res: Response) => {
     const result = await joinRoomService(roomId as string, userId as string, avatar as string)
 
     const io = req.app.get("io")
-    io.to(roomId).emit("player_joined", { userId, avatar })
+    io.to(roomId as string).emit("player_joined", { userId, avatar })
+    await emitTeamsToRoom(io, roomId as string)
 
     res.json(result)
   } catch (error: any) {
@@ -69,7 +78,8 @@ export const leaveRoom = async (req: Request, res: Response) => {
     const result = await leaveRoomService(roomId as string, userId)
 
     const io = req.app.get("io")
-    io.to(roomId).emit("player_left", { userId })
+    io.to(roomId as string).emit("player_left", { userId })
+    await afterPlayerLeftRoom(roomId as string, io)
 
     res.json(result)
   } catch (error: any) {
@@ -88,22 +98,7 @@ export const startGame = async (req: AuthenticatedRequest, res: Response) => {
     const result = await startGameService(roomId as string, req.user.uid)
 
     const io: Server = req.app.get("io")
-
-    // 1. Emit Game Started
-    io.to(roomId as string).emit("game_started", { roomId })
-
-    // 2. Emit First Question
-    const firstQuestion = result.questions[0]
-    io.to(roomId as string).emit("new_question", {
-      question: firstQuestion,
-      index: 0,
-      totalQuestions: result.questions.length
-    })
-
-    // 3. Start Timer for the next question (30s)
-    setTimeout(() => {
-      goToNextQuestion(roomId as string, io)
-    }, 30000)
+    broadcastGameStart(io, roomId as string, result.questions)
 
     res.json({ message: result.message, roomId: result.roomId })
   } catch (error: any) {
@@ -228,10 +223,99 @@ export const restartRoom = async (req: AuthenticatedRequest, res: Response) => {
     const result = await restartRoomService(roomId as string, req.user.uid)
 
     const io: Server = req.app.get("io")
+    cancelLobbyCountdown(roomId as string, io)
     io.to(roomId as string).emit("return_to_lobby", { roomId })
+    await emitTeamsToRoom(io, roomId as string)
 
     res.json(result)
   } catch (error: any) {
     res.status(400).json({ error: error.message })
+  }
+}
+
+export const setPlayerTeam = async (req: Request, res: Response) => {
+  const { roomId } = req.params
+  const { userId, team } = req.body as { userId?: string; team?: string }
+
+  try {
+    if (!userId || (team !== "a" && team !== "b")) {
+      res.status(400).json({ error: "userId and team (a or b) are required" })
+      return
+    }
+    const teams = await setPlayerTeamService(roomId as string, userId, team)
+    const io: Server = req.app.get("io")
+    io.to(roomId as string).emit("teams_updated", teams)
+    res.json({ teams })
+  } catch (error: any) {
+    res.status(400).json({ error: error.message })
+  }
+}
+
+export const patchTeamNames = async (req: AuthenticatedRequest, res: Response) => {
+  const { roomId } = req.params
+  const { teamAName, teamBName } = req.body as { teamAName?: string; teamBName?: string }
+
+  try {
+    if (!req.user?.uid) {
+      res.status(401).json({ error: "Unauthorized" })
+      return
+    }
+    const teams = await setTeamNamesService(
+      roomId as string,
+      req.user.uid,
+      teamAName ?? "",
+      teamBName ?? "",
+    )
+    const io: Server = req.app.get("io")
+    io.to(roomId as string).emit("teams_updated", teams)
+    res.json({ teams })
+  } catch (error: any) {
+    res.status(400).json({ error: error.message })
+  }
+}
+
+export const startLobbyCountdown = async (req: AuthenticatedRequest, res: Response) => {
+  const { roomId } = req.params
+
+  try {
+    if (!req.user?.uid) {
+      res.status(401).json({ error: "Unauthorized" })
+      return
+    }
+    const { endsAt, roomId: rid } = await startLobbyCountdownService(roomId as string, req.user.uid)
+    const io: Server = req.app.get("io")
+    io.to(roomId as string).emit("countdown_started", { endsAt })
+    await emitTeamsToRoom(io, roomId as string)
+    scheduleLobbyCountdown(rid, io, endsAt)
+    res.json({ endsAt })
+  } catch (error: any) {
+    res.status(400).json({ error: error.message })
+  }
+}
+
+export const cancelLobbyCountdownHandler = async (req: AuthenticatedRequest, res: Response) => {
+  const { roomId } = req.params
+
+  try {
+    if (!req.user?.uid) {
+      res.status(401).json({ error: "Unauthorized" })
+      return
+    }
+    const id = (roomId as string).toLowerCase()
+    const meta = await redis.hgetall(`room:${id}`)
+    if (Object.keys(meta).length === 0) {
+      res.status(404).json({ error: "Room not found" })
+      return
+    }
+    if (meta.host !== req.user.uid) {
+      res.status(403).json({ error: "Only the host can cancel the countdown" })
+      return
+    }
+    const io: Server = req.app.get("io")
+    cancelLobbyCountdown(roomId as string, io)
+    await emitTeamsToRoom(io, roomId as string)
+    res.json({ ok: true })
+  } catch (error: any) {
+    res.status(500).json({ error: error.message })
   }
 }

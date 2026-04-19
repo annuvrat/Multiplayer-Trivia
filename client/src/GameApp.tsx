@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { socket } from "./socket";
 import {
   getFreshIdToken,
@@ -16,6 +16,7 @@ import toast from "react-hot-toast";
 import { Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { parseQuizSnapshot, type ReplayQuestion } from "./utils/quizSnapshot";
+import type { TeamsSnapshot } from "./types/teams";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 const AUTH_TOKEN_STORAGE_KEY = "quizme-google-token";
@@ -116,6 +117,12 @@ export default function GameApp() {
     questions: ReplayQuestion[];
   } | null>(null);
 
+  /** Arena mode for the next created room (joining an existing room uses that room's mode from the server). */
+  const [dashboardGameMode, setDashboardGameMode] = useState<"ffa" | "tdm">("ffa");
+  const [activeRoomMode, setActiveRoomMode] = useState<"ffa" | "tdm">("ffa");
+  const [teamsState, setTeamsState] = useState<TeamsSnapshot | null>(null);
+  const [countdownEndsAt, setCountdownEndsAt] = useState<string | null>(null);
+
   const isAuthenticated = Boolean(authUser);
   const profileName = authUser?.name || userId || "Guest Player";
   const profileAvatar = authUser?.photoURL || avatar;
@@ -137,10 +144,21 @@ export default function GameApp() {
 
   const getPlayerIcon = (name: string) => {
     const player = players.find((p) => p.userId === name);
-    if (player) return player.avatar;
+    if (player?.avatar) return player.avatar;
     const hash = name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
     return HERO_ICONS[hash % HERO_ICONS.length];
   };
+
+  const applyRoomTeamsPayload = useCallback((teams: TeamsSnapshot | null | undefined) => {
+    if (!teams) {
+      setTeamsState(null);
+      setCountdownEndsAt(null);
+      return;
+    }
+    setTeamsState(teams);
+    setCountdownEndsAt(teams.countdownEndsAt ?? null);
+    setActiveRoomMode(teams.gameMode === "tdm" ? "tdm" : "ffa");
+  }, []);
 
   const playSound = (soundFile: string) => {
     if (!soundEnabled) return;
@@ -193,7 +211,7 @@ export default function GameApp() {
     }
   };
 
-  const handleStartGame = async () => {
+  const handleStartFfaGame = async () => {
     try {
       const protectedHeaders = await getProtectedHeaders();
       if (!protectedHeaders) {
@@ -206,11 +224,101 @@ export default function GameApp() {
         headers: protectedHeaders,
       });
       if (!response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as { error?: string };
         toast.error(data.error || "Failed to start game.");
       }
     } catch (err) {
       console.error("Error starting game:", err);
+    }
+  };
+
+  const handleStartTdmCountdown = async () => {
+    try {
+      const protectedHeaders = await getProtectedHeaders();
+      if (!protectedHeaders) {
+        toast.error("Host must sign in with Google to start.");
+        return;
+      }
+      const response = await fetch(
+        `${API_BASE_URL}/rooms/${roomId.toLowerCase()}/start-countdown`,
+        { method: "POST", headers: protectedHeaders },
+      );
+      const data = (await response.json()) as { error?: string; endsAt?: string };
+      if (!response.ok) {
+        toast.error(data.error || "Cannot start countdown.");
+        return;
+      }
+      if (data.endsAt) setCountdownEndsAt(data.endsAt);
+    } catch (err) {
+      console.error("Error starting countdown:", err);
+    }
+  };
+
+  const handleCancelTdmCountdown = async () => {
+    try {
+      const protectedHeaders = await getProtectedHeaders();
+      if (!protectedHeaders) {
+        toast.error("Host must sign in.");
+        return;
+      }
+      const response = await fetch(
+        `${API_BASE_URL}/rooms/${roomId.toLowerCase()}/cancel-countdown`,
+        { method: "POST", headers: protectedHeaders },
+      );
+      if (!response.ok) {
+        const data = (await response.json()) as { error?: string };
+        toast.error(data.error || "Could not cancel.");
+      }
+    } catch (err) {
+      console.error("Error cancelling countdown:", err);
+    }
+  };
+
+  const handlePickTeam = async (team: "a" | "b") => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/rooms/${roomId.toLowerCase()}/team`, {
+        method: "POST",
+        headers: HEADERS,
+        body: JSON.stringify({ userId, team }),
+      });
+      if (!response.ok) {
+        const data = (await response.json()) as { error?: string };
+        toast.error(data.error || "Could not switch team.");
+      }
+    } catch (err) {
+      console.error("pick team:", err);
+    }
+  };
+
+  const handleSaveTeamNames = async (teamAName: string, teamBName: string) => {
+    try {
+      const protectedHeaders = await getProtectedHeaders();
+      if (!protectedHeaders) {
+        toast.error("Host must sign in to rename teams.");
+        return;
+      }
+      const response = await fetch(
+        `${API_BASE_URL}/rooms/${roomId.toLowerCase()}/team-names`,
+        {
+          method: "PATCH",
+          headers: protectedHeaders,
+          body: JSON.stringify({ teamAName, teamBName }),
+        },
+      );
+      if (!response.ok) {
+        const data = (await response.json()) as { error?: string };
+        toast.error(data.error || "Could not save team names.");
+      }
+    } catch (err) {
+      console.error("save team names:", err);
+    }
+  };
+
+  const handleStartGame = async () => {
+    if (activeRoomMode === "tdm") {
+      await handleStartTdmCountdown();
+    } else {
+      await handleStartFfaGame();
     }
   };
 
@@ -279,6 +387,9 @@ export default function GameApp() {
       setPlayers([]);
       setGameState("waiting");
       setCanManageRoom(false);
+      setTeamsState(null);
+      setCountdownEndsAt(null);
+      setActiveRoomMode("ffa");
       toast("Left the arena. See you later!", { icon: "👋" });
     } catch (err) {
       console.error("Error leaving room:", err);
@@ -298,6 +409,7 @@ export default function GameApp() {
       const response = await fetch(`${API_BASE_URL}/rooms/create`, {
         method: "POST",
         headers: protectedHeaders,
+        body: JSON.stringify({ gameMode: dashboardGameMode }),
       });
       const data = await response.json();
       if (response.ok) {
@@ -340,20 +452,29 @@ export default function GameApp() {
         });
         if (!roomRes.ok) throw new Error("Could not sync room status");
 
-        const roomData = await roomRes.ok ? await roomRes.json() : null;
+        const roomData = (await roomRes.json()) as Record<string, unknown>;
         console.log("Room synced:", roomData);
 
-        if (roomData) {
-          const canManage = Boolean(authUser?.uid && roomData.host === authUser.uid);
-          setCanManageRoom(canManage);
-          setGameState(roomData.status);
-          if (roomData.status === "playing") {
-            setCurrentQuestion(roomData.currentQuestion);
-            setQIndex(roomData.currentQuestionIndex);
-          }
+        const canManage = Boolean(authUser?.uid && roomData.host === authUser.uid);
+        setCanManageRoom(canManage);
+        setGameState(
+          roomData.status as "waiting" | "playing" | "mid-round-leaderboard" | "finished",
+        );
+        if (roomData.status === "playing") {
+          setCurrentQuestion(roomData.currentQuestion);
+          setQIndex(roomData.currentQuestionIndex as number);
         }
 
-        setPlayers(roomData.players);
+        const pl = roomData.players as { userId: string; avatar: string }[] | undefined;
+        setPlayers(
+          Array.isArray(pl) ? pl.map((p) => ({ userId: p.userId, avatar: p.avatar || "" })) : [],
+        );
+
+        const teams = roomData.teams as TeamsSnapshot | undefined;
+        applyRoomTeamsPayload(teams ?? null);
+        if (typeof roomData.gameMode === "string") {
+          setActiveRoomMode(roomData.gameMode === "tdm" ? "tdm" : "ffa");
+        }
 
         toast.success(
           r && typeof r === "string" ? "Session Restored! ⚡" : "Welcome, Champion! ⚔️",
@@ -502,6 +623,7 @@ export default function GameApp() {
     );
     socket.on("game_started", () => {
       setGameState("playing");
+      setCountdownEndsAt(null);
       playSound("game_start.mp3");
     });
     socket.on("new_question", (data) => {
@@ -549,10 +671,42 @@ export default function GameApp() {
     socket.on("receive_message", (msg) => {
       setMessages((prev) => [...prev.slice(-49), msg]);
     });
-    socket.on("return_to_lobby", () => {
+    socket.on("return_to_lobby", async () => {
       setGameState("waiting");
       setLeaderboard([]);
+      setCountdownEndsAt(null);
+      const rid = roomIdRef.current?.toLowerCase();
+      if (rid) {
+        try {
+          const res = await fetch(`${API_BASE_URL}/rooms/${rid}`, { headers: HEADERS });
+          if (res.ok) {
+            const d = (await res.json()) as { teams?: TeamsSnapshot; gameMode?: string };
+            if (d.teams) {
+              setTeamsState(d.teams);
+              setCountdownEndsAt(d.teams.countdownEndsAt ?? null);
+            }
+            if (d.gameMode === "tdm") setActiveRoomMode("tdm");
+            else setActiveRoomMode("ffa");
+          }
+        } catch {
+          /* ignore */
+        }
+      }
       toast("Returning to lobby for a new round...", { icon: "🔄" });
+    });
+
+    socket.on("teams_updated", (payload: TeamsSnapshot) => {
+      setTeamsState(payload);
+      setCountdownEndsAt(payload.countdownEndsAt ?? null);
+      setActiveRoomMode(payload.gameMode === "tdm" ? "tdm" : "ffa");
+    });
+
+    socket.on("countdown_started", (data: { endsAt: string }) => {
+      if (data?.endsAt) setCountdownEndsAt(data.endsAt);
+    });
+
+    socket.on("countdown_cancelled", () => {
+      setCountdownEndsAt(null);
     });
 
     return () => {
@@ -566,6 +720,9 @@ export default function GameApp() {
       socket.off("game_ended");
       socket.off("receive_message");
       socket.off("return_to_lobby");
+      socket.off("teams_updated");
+      socket.off("countdown_started");
+      socket.off("countdown_cancelled");
       socket.disconnect();
     };
   }, []);
@@ -661,6 +818,52 @@ export default function GameApp() {
                   ? "You can host arenas and generate AI quizzes."
                   : "Guest mode supports instant join and play. Sign in to host arenas."}
               </p>
+
+              <div className="mt-5">
+                <p className="mb-2 text-xs uppercase tracking-widest text-slate-400">Game mode</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDashboardGameMode("ffa")}
+                    className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                      dashboardGameMode === "ffa"
+                        ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-100"
+                        : "border-white/15 bg-white/5 text-slate-300 hover:border-white/25"
+                    }`}
+                  >
+                    Free-for-all
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDashboardGameMode("tdm")}
+                    className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                      dashboardGameMode === "tdm"
+                        ? "border-violet-400/60 bg-violet-500/15 text-violet-100"
+                        : "border-white/15 bg-white/5 text-slate-300 hover:border-white/25"
+                    }`}
+                  >
+                    Team (TDM)
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  FFA is every player for themselves. TDM groups players into two squads (see below).
+                </p>
+              </div>
+
+              {dashboardGameMode === "tdm" ? (
+                <div className="mt-5 rounded-xl border border-violet-500/25 bg-gradient-to-br from-violet-950/50 to-slate-950/80 p-4 shadow-inner">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-300/90">
+                    Team Deathmatch
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-200">
+                    This arena is a <span className="text-violet-200">squad battle</span>: players are split into{" "}
+                    <span className="font-medium text-slate-100">Sapphire</span> and{" "}
+                    <span className="font-medium text-slate-100">Crimson</span> as they join (even headcount).
+                    Invite friends on both sides — full team scoring and a live squad board are next on the roadmap;
+                    rounds still use the same quiz flow you already know.
+                  </p>
+                </div>
+              ) : null}
 
               <div className="mt-6 grid gap-4 md:grid-cols-2">
                 <div>
@@ -808,6 +1011,12 @@ export default function GameApp() {
           setSoundEnabled={setSoundEnabled}
           loading={loading}
           canManageRoom={canManageRoom}
+          gameMode={activeRoomMode}
+          teamsState={teamsState}
+          countdownEndsAt={countdownEndsAt}
+          onPickTeam={handlePickTeam}
+          onSaveTeamNames={handleSaveTeamNames}
+          onCancelCountdown={handleCancelTdmCountdown}
         />
       )}
 

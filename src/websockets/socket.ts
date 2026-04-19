@@ -1,5 +1,6 @@
 import { Socket, Server } from "socket.io";
 import { leaveRoomService } from "../services/room.service.ts";
+import { afterPlayerLeftRoom } from "../services/lobbyNotify.ts";
 
 type SocketData = {
   roomId?: string
@@ -39,6 +40,7 @@ export default function setupSocket(io: Server) {
         userId,
         socketId: socket.id
       })
+      await afterPlayerLeftRoom(roomId, io)
     })
 
     socket.on("disconnect", async () => {
@@ -53,6 +55,7 @@ export default function setupSocket(io: Server) {
           userId,
           socketId: socket.id
         })
+        await afterPlayerLeftRoom(roomId, io)
       }
 
       console.log("User disconnected:", socket.id)
