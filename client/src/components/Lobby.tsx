@@ -169,7 +169,7 @@ const Lobby: React.FC<LobbyProps> = ({
           <div className="group flex items-center gap-4">
             <div className="text-left text-4xl font-black italic tracking-tighter text-gray-800 drop-shadow-sm dark:text-white">
               Code:{" "}
-              <span className="text-blue-600 dark:text-blue-400">{roomId.toUpperCase()}</span>
+              <span className="text-blue-600 dark:text-blue-400">{roomId}</span>
             </div>
             <button
               onClick={copyInviteLink}

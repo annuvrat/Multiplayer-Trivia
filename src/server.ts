@@ -25,10 +25,18 @@ const io = new Server(server, {
 
 app.set("io", io)
 
-app.get("/", (_, res) => {
-  res.send("Quiz Arena Backend Running")
-})
+app.get("/test/path", (req, res) => {
+  // res.json({ message: "Quiz Arena Backend Running" })
 
+  console.log(req.headers);
+
+  res.json(req.headers)
+  
+})
+app.get("/test", (req, res) => {
+    res.setHeader("X-Custom-Header", "hello")
+    res.json({ success: true })
+})
 const PORT = 5000
 setupScoket(io)
 server.listen(PORT, () => {

@@ -7,13 +7,12 @@ import {
   signOutFirebase,
   type FirebaseGoogleUser,
 } from '../firebase/FireBase';
+import { API_BASE_URL } from '../config/apiBase';
 
 const BG_MUSIC_SRC = '/sounds/bg_music.mp3';
-/** Background music level (0–1). Kept moderate so it sits under UI. */
 const BG_MUSIC_VOLUME = 0.18;
 const AUTH_USER_STORAGE_KEY = 'quizme-google-user';
 const AUTH_TOKEN_STORAGE_KEY = 'quizme-google-token';
-const BACKEND_AUTH_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 const MARQUEE_ITEMS = [
   'AI Quiz Generation', 'Live Leaderboard', 'Team Mode', 'Power-ups',
@@ -21,241 +20,105 @@ const MARQUEE_ITEMS = [
 ];
 
 const features = [
-  { num: '01', title: 'AI Quiz Engine', desc: 'Any topic, any difficulty, any length — generated in under 3 seconds by Claude.' },
-  { num: '02', title: 'Real-time Multiplayer', desc: 'Create rooms and battle live. Share a link — friends join instantly, no account needed.' },
-  { num: '03', title: 'Live Leaderboard', desc: 'Rankings update in real-time with score animations and killer audio feedback.' },
-  { num: '04', title: 'Team Mode', desc: 'Split into squads, strategize in lobby chat, and deploy power-ups to dominate.' },
-  { num: '05', title: 'Player Dashboard', desc: 'Track wins, streaks, and performance across every topic you\'ve tackled.' },
-  { num: '06', title: 'Champion Reveal', desc: 'Epic end-screen animations and customizable victory sounds for the winner.' },
+  { num: '01', title: 'AI Quiz Engine', desc: 'Any topic, any difficulty, any length — generated in under 3 seconds by Claude.', accent: 'from-violet-500 to-purple-600' },
+  { num: '02', title: 'Real-time Multiplayer', desc: 'Create rooms and battle live. Share a link — friends join instantly, no account needed.', accent: 'from-rose-500 to-pink-600' },
+  { num: '03', title: 'Live Leaderboard', desc: 'Rankings update in real-time with score animations and killer audio feedback.', accent: 'from-amber-400 to-orange-500' },
+  { num: '04', title: 'Team Mode', desc: 'Split into squads, strategize in lobby chat, and deploy power-ups to dominate.', accent: 'from-cyan-400 to-sky-500' },
+  { num: '05', title: 'Player Dashboard', desc: "Track wins, streaks, and performance across every topic you've tackled.", accent: 'from-emerald-400 to-teal-500' },
+  { num: '06', title: 'Champion Reveal', desc: 'Epic end-screen animations and customizable victory sounds for the winner.', accent: 'from-yellow-400 to-amber-500' },
 ];
 
 const steps = [
-  { title: 'Create a room', desc: 'Start a new game or join with a room code. No download, no setup.' },
-  { title: 'Generate your quiz', desc: 'Pick topic, difficulty, and question count. AI does the rest in seconds.' },
-  { title: 'Invite & strategize', desc: 'Share the link and talk trash in the lobby — then gear up for battle.' },
-  { title: 'Claim the crown', desc: 'Answer fast, climb the leaderboard, and become the undisputed champion.' },
+  { icon: '⚡', title: 'Create a room', desc: 'Start a new game or join with a room code. No download, no setup.' },
+  { icon: '🧠', title: 'Generate your quiz', desc: 'Pick topic, difficulty, and question count. AI does the rest in seconds.' },
+  { icon: '📣', title: 'Invite & strategize', desc: 'Share the link and talk trash in the lobby — then gear up for battle.' },
+  { icon: '👑', title: 'Claim the crown', desc: 'Answer fast, climb the leaderboard, and become the undisputed champion.' },
 ];
 
 const showcase = [
-  { icon: '💬', color: 'purple', title: 'Lobby Chat', desc: 'Team up, talk tactics, or just roast each other before the countdown hits zero.', tag: 'Room fills → chat unlocks' },
-  { icon: '⚔️', color: 'red', title: 'Live Arena', desc: 'Every correct answer rockets you up the leaderboard. Every second counts.', tag: 'Real-time rank updates' },
-  { icon: '👑', color: 'gold', title: 'Champion Reveal', desc: 'The winner gets their moment. Confetti, sound, and a crown that can\'t be disputed.', tag: 'Epic end-game screen' },
+  {
+    icon: '💬',
+    title: 'Lobby Chat',
+    desc: 'Team up, talk tactics, or just roast each other before the countdown hits zero.',
+    tag: 'Room fills → chat unlocks',
+    border: 'border-violet-500/30',
+    glow: 'shadow-violet-500/10',
+    badge: 'bg-violet-500/10 text-violet-300',
+  },
+  {
+    icon: '⚔️',
+    title: 'Live Arena',
+    desc: 'Every correct answer rockets you up the leaderboard. Every second counts.',
+    tag: 'Real-time rank updates',
+    border: 'border-rose-500/30',
+    glow: 'shadow-rose-500/10',
+    badge: 'bg-rose-500/10 text-rose-300',
+  },
+  {
+    icon: '👑',
+    title: 'Champion Reveal',
+    desc: "The winner gets their moment. Confetti, sound, and a crown that can't be disputed.",
+    tag: 'Epic end-game screen',
+    border: 'border-amber-500/30',
+    glow: 'shadow-amber-500/10',
+    badge: 'bg-amber-500/10 text-amber-300',
+  },
 ];
 
-const css = `
-  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap');
+// Inline keyframe styles we can't do with Tailwind alone
+const globalStyles = `
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&display=swap');
 
-  :root {
-    --ink: #0f0e17;
-    --ink2: #161525;
-    --ink3: #1c1b2e;
-    --ink4: #2a2840;
-    --surface: #161525;
-    --muted: #6b6880;
-    --bright: #f5f4f8;
-    --accent1: #7c6af7;
-    --accent2: #e8554e;
-    --accent3: #f5c842;
-    --accent4: #3ecf8e;
-    --border: rgba(255,255,255,0.08);
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
   }
-
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html { scroll-behavior: smooth; }
-  body { background: var(--ink); font-family: 'DM Sans', sans-serif; color: var(--bright); overflow-x: hidden; }
-
-  /* NAV */
-  .nav {
-    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 18px 40px;
-    background: rgba(15,14,23,0.75);
-    backdrop-filter: blur(16px);
-    border-bottom: 1px solid var(--border);
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
   }
-  .nav-logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 20px; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; }
-  .logo-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent3); }
-  .nav-links { display: flex; align-items: center; gap: 36px; }
-  .nav-links a { font-size: 14px; color: var(--muted); text-decoration: none; transition: color 0.2s; }
-  .nav-links a:hover { color: var(--bright); }
-  .nav-tools { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-  .mobile-menu-btn { display: none; background: none; border: none; color: var(--bright); font-size: 22px; cursor: pointer; padding: 4px; line-height: 1; }
-  .nav-cta {
-    padding: 9px 20px; border-radius: 8px; font-size: 14px; font-weight: 500;
-    background: var(--accent1); color: #fff; border: none; cursor: pointer;
-    transition: background 0.2s, transform 0.15s; font-family: 'DM Sans', sans-serif;
-  }
-  .nav-cta:hover { background: #9181f9; transform: translateY(-1px); }
-  .nav-mute {
-    padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 500;
-    background: rgba(255,255,255,0.06); color: var(--bright); border: 1px solid var(--border);
-    cursor: pointer; font-family: 'DM Sans', sans-serif; transition: background 0.2s, border-color 0.2s;
-    display: inline-flex; align-items: center; gap: 6px;
-  }
-  .nav-mute:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.15); }
-
-  /* HERO */
-  .hero {
-    min-height: 100vh; display: flex; flex-direction: column; align-items: center;
-    justify-content: center; text-align: center; padding: 120px 32px 80px;
-    position: relative; overflow: hidden;
-  }
-  .hero-bg { position: absolute; inset: 0; pointer-events: none; }
-  .blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.35; animation: drift 8s ease-in-out infinite; }
-  .blob1 { width: 480px; height: 480px; background: var(--accent1); top: -100px; left: -120px; animation-delay: 0s; }
-  .blob2 { width: 360px; height: 360px; background: var(--accent2); bottom: -80px; right: -100px; animation-delay: -4s; }
-  .blob3 { width: 280px; height: 280px; background: var(--accent3); top: 40%; left: 55%; animation-delay: -2s; opacity: 0.2; }
-
-  @keyframes drift {
+  @keyframes blobDrift {
     0%, 100% { transform: translate(0, 0) scale(1); }
-    33% { transform: translate(30px, -20px) scale(1.05); }
-    66% { transform: translate(-20px, 20px) scale(0.97); }
+    33% { transform: translate(40px, -30px) scale(1.06); }
+    66% { transform: translate(-25px, 25px) scale(0.96); }
+  }
+  @keyframes gridFade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes tickerBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
   }
 
-  .hero-badge {
-    display: inline-flex; align-items: center; gap: 8px;
-    background: rgba(124,106,247,0.15); border: 1px solid rgba(124,106,247,0.35);
-    border-radius: 100px; padding: 6px 16px;
-    font-size: 12px; font-weight: 500; color: #b8b0fb; letter-spacing: 0.5px;
-    text-transform: uppercase; margin-bottom: 32px;
-    animation: fadein 0.6s ease both;
+  .font-syne { font-family: 'Syne', sans-serif; }
+
+  .anim-fade-up { animation: fadeUp 0.6s ease both; }
+  .anim-fade-up-1 { animation: fadeUp 0.6s ease 0.1s both; }
+  .anim-fade-up-2 { animation: fadeUp 0.6s ease 0.2s both; }
+  .anim-fade-up-3 { animation: fadeUp 0.6s ease 0.3s both; }
+  .anim-fade-up-4 { animation: fadeUp 0.6s ease 0.4s both; }
+
+  .blob { animation: blobDrift 10s ease-in-out infinite; }
+  .blob-2 { animation: blobDrift 13s ease-in-out infinite; animation-delay: -5s; }
+  .blob-3 { animation: blobDrift 9s ease-in-out infinite; animation-delay: -3s; }
+
+  .marquee-track { animation: marquee 30s linear infinite; }
+
+  .ticker-dot { animation: tickerBlink 1.4s ease-in-out infinite; }
+
+  .feat-card:hover .feat-num-text {
+    background: linear-gradient(90deg, #a78bfa, #ec4899);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
   }
-  .badge-blink { width: 6px; height: 6px; border-radius: 50%; background: var(--accent3); animation: blink 1.2s infinite; }
-  @keyframes blink { 0%,100% { opacity:1 } 50% { opacity:0.3 } }
 
-  .hero-headline {
-    font-family: 'Syne', sans-serif; font-weight: 800;
-    font-size: clamp(44px, 7vw, 92px); line-height: 1.0;
-    letter-spacing: -2.5px; margin-bottom: 24px;
-    animation: fadein 0.7s ease 0.1s both;
-  }
-  .hl-white { color: var(--bright); }
-  .hl-purple { color: var(--accent1); }
-  .hl-red { color: var(--accent2); }
-
-  .hero-sub {
-    font-size: 18px; color: var(--muted); max-width: 520px; line-height: 1.7;
-    margin-bottom: 48px; font-weight: 300;
-    animation: fadein 0.7s ease 0.2s both;
-  }
-  .hero-actions { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; animation: fadein 0.7s ease 0.3s both; }
-  .btn-primary {
-    padding: 16px 32px; border-radius: 10px; font-size: 15px; font-weight: 500;
-    background: var(--accent1); color: #fff; border: none; cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s; font-family: 'DM Sans', sans-serif;
-  }
-  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(124,106,247,0.4); }
-  .btn-ghost {
-    padding: 16px 32px; border-radius: 10px; font-size: 15px; font-weight: 500;
-    background: transparent; color: var(--bright); border: 1px solid var(--border);
-    cursor: pointer; transition: border-color 0.2s, background 0.2s; font-family: 'DM Sans', sans-serif;
-  }
-  .btn-ghost:hover { border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.05); }
-
-  .hero-meta { margin-top: 60px; display: flex; gap: 40px; justify-content: center; animation: fadein 0.7s ease 0.4s both; }
-  .meta-item { text-align: center; }
-  .meta-num { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 700; color: var(--bright); }
-  .meta-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
-  .meta-sep { width: 1px; background: var(--border); }
-
-  @keyframes fadein { from { opacity:0; transform:translateY(16px) } to { opacity:1; transform:translateY(0) } }
-
-  /* MARQUEE */
-  .marquee-wrap {
-    overflow: hidden; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-    padding: 18px 0; background: var(--ink3);
-  }
-  .marquee { display: flex; animation: scroll 28s linear infinite; width: max-content; }
-  .marquee-item { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; padding: 0 32px; color: var(--muted); white-space: nowrap; }
-  .marquee-item span { color: var(--accent3); margin: 0 12px; }
-  @keyframes scroll { from { transform:translateX(0) } to { transform:translateX(-50%) } }
-
-  /* SECTIONS */
-  .section { padding: 100px 40px; max-width: 1160px; margin: 0 auto; }
-  .section-label { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--accent1); font-weight: 500; margin-bottom: 14px; }
-  .section-title { font-family: 'Syne', sans-serif; font-size: clamp(32px, 4vw, 52px); font-weight: 800; letter-spacing: -1.5px; line-height: 1.1; margin-bottom: 16px; }
-  .section-sub { font-size: 17px; color: var(--muted); max-width: 480px; line-height: 1.7; font-weight: 300; }
-
-  /* FEATURES */
-  .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; margin-top: 64px; border: 2px solid var(--border); border-radius: 16px; overflow: hidden; }
-  .feat-card { padding: 36px 32px; background: var(--surface); position: relative; transition: background 0.25s; }
-  .feat-card:hover { background: var(--ink4); }
-  .feat-card::after { content:''; position:absolute; top:0; right:0; bottom:0; width:2px; background: var(--border); }
-  .feat-card:nth-child(3n)::after { display:none; }
-  .feat-card::before { content:''; position:absolute; bottom:0; left:0; right:0; height:2px; background: var(--border); }
-  .feat-card:nth-child(n+4)::before { display:none; }
-  .feat-num { font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 1px; margin-bottom: 12px; }
-  .feat-title { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; margin-bottom: 10px; }
-  .feat-desc { font-size: 14px; color: var(--muted); line-height: 1.7; font-weight: 300; }
-
-  /* STEPS */
-  .steps-section { background: var(--ink3); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-  .steps-inner { padding: 100px 40px; max-width: 1160px; margin: 0 auto; }
-  .steps-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin-top: 64px; }
-  .step-card { padding: 36px 28px; position: relative; }
-  .step-card:not(:last-child)::after { content:''; position:absolute; top: 56px; right: -1px; width:2px; height:40px; background: var(--border); }
-  .step-num {
-    width: 48px; height: 48px; border-radius: 50%; border: 2px solid var(--border);
-    display: flex; align-items: center; justify-content: center;
-    font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700;
-    margin-bottom: 22px; color: var(--bright); background: var(--ink);
-    transition: border-color 0.2s, background 0.2s;
-  }
-  .step-card:hover .step-num { border-color: var(--accent1); background: rgba(124,106,247,0.15); }
-  .step-title { font-family: 'Syne', sans-serif; font-size: 17px; font-weight: 700; margin-bottom: 10px; }
-  .step-desc { font-size: 14px; color: var(--muted); line-height: 1.7; font-weight: 300; }
-
-  /* SHOWCASE */
-  .showcase-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 64px; }
-  .show-card {
-    border: 1px solid var(--border); border-radius: 14px;
-    background: var(--surface); overflow: hidden;
-    transition: border-color 0.2s, transform 0.2s;
-  }
-  .show-card:hover { border-color: rgba(124,106,247,0.4); transform: translateY(-4px); }
-  .show-top { padding: 32px; }
-  .show-icon-wrap { width: 56px; height: 56px; border-radius: 14px; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; font-size: 24px; }
-  .show-icon-wrap.purple { background: rgba(124,106,247,0.15); }
-  .show-icon-wrap.red { background: rgba(232,85,78,0.15); }
-  .show-icon-wrap.gold { background: rgba(245,200,66,0.15); }
-  .show-title { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 700; margin-bottom: 8px; }
-  .show-desc { font-size: 14px; color: var(--muted); line-height: 1.6; }
-  .show-bottom { padding: 16px 32px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); letter-spacing: 0.5px; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
-  .show-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent4); flex-shrink: 0; }
-
-  /* CTA */
-  .cta-section { padding: 100px 40px; text-align: center; position: relative; overflow: hidden; }
-  .cta-bg { position: absolute; inset: 0; pointer-events: none; }
-  .cta-blob { position: absolute; width: 600px; height: 300px; border-radius: 50%; filter: blur(80px); opacity: 0.12; background: var(--accent1); left: 50%; top: 50%; transform: translate(-50%,-50%); }
-  .cta-title { font-family: 'Syne', sans-serif; font-size: clamp(36px, 5vw, 64px); font-weight: 800; letter-spacing: -2px; margin-bottom: 24px; line-height: 1.05; position: relative; }
-  .cta-sub { font-size: 17px; color: var(--muted); margin-bottom: 40px; font-weight: 300; position: relative; }
-  .cta-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; position: relative; }
-
-  /* FOOTER */
-  .footer {
-    border-top: 1px solid var(--border); padding: 48px 40px;
-    display: flex; align-items: center; justify-content: space-between;
-    background: var(--ink);
-  }
-  .footer-logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 16px; display: flex; align-items: center; gap: 8px; }
-  .footer-links { display: flex; gap: 28px; }
-  .footer-links a { font-size: 13px; color: var(--muted); text-decoration: none; transition: color 0.2s; }
-  .footer-links a:hover { color: var(--bright); }
-  .footer-copy { font-size: 13px; color: var(--muted); }
-
-  @media (max-width: 900px) {
-    .nav { padding: 14px 20px; }
-    .nav-links { display: none; }
-    .mobile-menu-btn { display: block; }
-    .hero { padding: 100px 20px 60px; }
-    .hero-meta { gap: 24px; }
-    .features-grid { grid-template-columns: 1fr; }
-    .steps-grid { grid-template-columns: 1fr 1fr; }
-    .showcase-grid { grid-template-columns: 1fr; }
-    .section { padding: 64px 20px; }
-    .steps-inner { padding: 64px 20px; }
-    .footer { flex-direction: column; gap: 20px; text-align: center; }
-    .footer-links { flex-wrap: wrap; justify-content: center; }
+  /* Grid overlay on hero */
+  .hero-grid {
+    background-image:
+      linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 64px 64px;
   }
 `;
 
@@ -267,11 +130,8 @@ const App: React.FC = () => {
   const [authUser, setAuthUser] = useState<FirebaseGoogleUser | null>(() => {
     const raw = localStorage.getItem(AUTH_USER_STORAGE_KEY);
     if (!raw) return null;
-    try {
-      return JSON.parse(raw) as FirebaseGoogleUser;
-    } catch {
-      return null;
-    }
+    try { return JSON.parse(raw) as FirebaseGoogleUser; }
+    catch { return null; }
   });
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const musicMutedRef = useRef(musicMuted);
@@ -280,31 +140,16 @@ const App: React.FC = () => {
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
-
     el.volume = BG_MUSIC_VOLUME;
-
-    if (musicMuted) {
-      el.pause();
-      return;
-    }
-
-    const tryPlay = () => {
-      el.volume = BG_MUSIC_VOLUME;
-      return el.play();
-    };
-
+    if (musicMuted) { el.pause(); return; }
+    const tryPlay = () => { el.volume = BG_MUSIC_VOLUME; return el.play(); };
     let cancelled = false;
-    const unlock = () => {
-      if (cancelled || musicMutedRef.current) return;
-      void tryPlay();
-    };
-
+    const unlock = () => { if (cancelled || musicMutedRef.current) return; void tryPlay(); };
     void tryPlay().catch(() => {
       if (cancelled) return;
       document.addEventListener('pointerdown', unlock, { passive: true });
       document.addEventListener('keydown', unlock);
     });
-
     return () => {
       cancelled = true;
       document.removeEventListener('pointerdown', unlock);
@@ -313,9 +158,7 @@ const App: React.FC = () => {
   }, [musicMuted]);
 
   useEffect(() => {
-    const unsub = onFirebaseAuthStateChange((user) => {
-      setAuthUser(user);
-    });
+    const unsub = onFirebaseAuthStateChange((user) => setAuthUser(user));
     return () => unsub();
   }, []);
 
@@ -340,11 +183,9 @@ const App: React.FC = () => {
     try {
       const token = await getFreshIdToken();
       if (token) {
-        await fetch(`${BACKEND_AUTH_BASE_URL}/auth/google/signout`, {
+        await fetch(`${API_BASE_URL}/auth/signout`, {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         }).catch(() => null);
       }
       await signOutFirebase();
@@ -363,168 +204,246 @@ const App: React.FC = () => {
     navigate(`/go?next=${next}`);
   };
 
-  const marqueeContent = [...MARQUEE_ITEMS, ...MARQUEE_ITEMS].map((item, i) => (
-    <span key={i} className="marquee-item">
-      {item} <span>✦</span>
-    </span>
-  ));
-
   return (
     <>
-      <style dangerouslySetInnerHTML={{ __html: css }} />
+      <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
       <audio ref={audioRef} src={BG_MUSIC_SRC} autoPlay playsInline loop preload="auto" hidden />
 
-      {/* NAV */}
-      <nav className="nav">
-        <div className="nav-logo">
-          <div className="logo-dot" />
-          QuizArena
+      {/* ── NAV ── */}
+      <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 md:px-10 h-16 bg-black/70 backdrop-blur-xl border-b border-white/[0.06]">
+        {/* Logo */}
+        <div className="font-syne font-extrabold text-xl tracking-tight flex items-center gap-2">
+          <span className="ticker-dot w-2 h-2 rounded-full bg-yellow-400 inline-block shadow-[0_0_8px_#facc15]" />
+          <span className="text-white">Quiz</span><span className="text-rose-500">Arena</span>
         </div>
-        <div className="nav-links">
-          <a href="#features">Features</a>
-          <a href="#how">How it works</a>
-          <a href="#arena">Arena</a>
-          <button className="nav-cta" onClick={authUser ? goToPlay : goToAuthPortal} disabled={authLoading}>
-            {authUser ? `Continue as ${authUser.name.split(' ')[0]}` : 'Sign in'}
-          </button>
+
+        {/* Desktop links */}
+        <div className="hidden md:flex items-center gap-8">
+          {['#features', '#how', '#arena'].map((href, i) => (
+            <a key={href} href={href} className="text-[13px] text-white/40 hover:text-white/90 transition-colors tracking-wide">
+              {['Features', 'How it works', 'Arena'][i]}
+            </a>
+          ))}
         </div>
-        <div className="nav-tools">
-          {authUser ? (
+
+        {/* Right controls */}
+        <div className="flex items-center gap-2">
+          {authUser && (
             <button
-              type="button"
-              className="nav-mute"
               onClick={handleSignOut}
               disabled={authLoading}
-              aria-label="Sign out"
+              className="hidden md:inline-flex items-center gap-1.5 text-[13px] text-white/50 hover:text-white/80 transition-colors px-3 py-1.5 rounded-lg border border-white/[0.07] hover:border-white/[0.15] bg-white/[0.03] hover:bg-white/[0.07]"
             >
               {authLoading ? '...' : 'Sign out'}
             </button>
-          ) : null}
+          )}
           <button
-            type="button"
-            className="nav-mute"
-            onClick={() => setMusicMuted((m) => !m)}
+            onClick={() => setMusicMuted(m => !m)}
+            className="hidden md:inline-flex items-center gap-1.5 text-[13px] text-white/50 hover:text-white/80 transition-colors px-3 py-1.5 rounded-lg border border-white/[0.07] hover:border-white/[0.15] bg-white/[0.03] hover:bg-white/[0.07]"
             aria-pressed={musicMuted}
-            aria-label={musicMuted ? 'Unmute background music' : 'Mute background music'}
           >
-            {musicMuted ? '🔇 Music off' : '🔊 Mute music'}
+            {musicMuted ? '🔇' : '🔊'} {musicMuted ? 'Off' : 'Music'}
           </button>
           <button
-            type="button"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="mobile-menu-btn"
-            aria-expanded={mobileMenuOpen}
-            aria-label="Toggle menu"
+            onClick={authUser ? goToPlay : goToAuthPortal}
+            disabled={authLoading}
+            className="text-[13px] font-semibold px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white transition-all hover:-translate-y-px hover:shadow-[0_0_20px_rgba(139,92,246,0.5)] active:translate-y-0"
+          >
+            {authUser ? `Continue as ${authUser.name.split(' ')[0]}` : 'Sign in'}
+          </button>
+          <button
+            onClick={() => setMobileMenuOpen(o => !o)}
+            className="md:hidden text-white/60 hover:text-white text-xl p-1"
           >
             {mobileMenuOpen ? '✕' : '☰'}
           </button>
         </div>
       </nav>
 
-      {/* HERO */}
-      <section className="hero">
-        <div className="hero-bg">
-          <div className="blob blob1" />
-          <div className="blob blob2" />
-          <div className="blob blob3" />
+      {/* Mobile menu */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-x-0 top-16 z-40 bg-black/95 backdrop-blur-xl border-b border-white/[0.06] p-6 flex flex-col gap-5 md:hidden">
+          {['#features', '#how', '#arena'].map((href, i) => (
+            <a key={href} href={href} onClick={() => setMobileMenuOpen(false)} className="text-white/60 hover:text-white text-base transition-colors">
+              {['Features', 'How it works', 'Arena'][i]}
+            </a>
+          ))}
+          <div className="flex gap-2 pt-2 border-t border-white/[0.07]">
+            {authUser && (
+              <button onClick={handleSignOut} disabled={authLoading} className="text-[13px] text-white/50 px-3 py-2 rounded-lg border border-white/[0.07] bg-white/[0.03]">
+                {authLoading ? '...' : 'Sign out'}
+              </button>
+            )}
+            <button onClick={() => setMusicMuted(m => !m)} className="text-[13px] text-white/50 px-3 py-2 rounded-lg border border-white/[0.07] bg-white/[0.03]">
+              {musicMuted ? '🔇 Off' : '🔊 Music'}
+            </button>
+          </div>
         </div>
+      )}
 
-        <div className="hero-badge">
-          <div className="badge-blink" />
+      {/* ── HERO ── */}
+      <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-6 pt-24 pb-20 overflow-hidden">
+        {/* Grid bg */}
+        <div className="hero-grid absolute inset-0 pointer-events-none" />
+
+        {/* Blobs */}
+        <div className="blob absolute w-[560px] h-[560px] rounded-full bg-violet-600/20 blur-[120px] -top-20 -left-32 pointer-events-none" />
+        <div className="blob-2 absolute w-[400px] h-[400px] rounded-full bg-rose-600/15 blur-[100px] bottom-0 -right-20 pointer-events-none" />
+        <div className="blob-3 absolute w-[300px] h-[300px] rounded-full bg-amber-500/10 blur-[90px] top-1/2 left-1/2 pointer-events-none" />
+
+        {/* Badge */}
+        <div className="anim-fade-up inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-violet-500/10 border border-violet-500/25 text-violet-300 text-[11px] font-semibold tracking-widest uppercase mb-8">
+          <span className="ticker-dot w-1.5 h-1.5 rounded-full bg-yellow-400 shadow-[0_0_6px_#facc15]" />
           AI-Powered · Real-time · Free to play
         </div>
 
-        <h1 className="hero-headline">
-          <span className="hl-white">Quiz battles.</span><br />
-          <span className="hl-purple">AI-generated.</span><br />
-          <span className="hl-red">Epic vibes.</span>
+        {/* Headline */}
+        <h1 className="anim-fade-up-1 font-syne font-extrabold text-[clamp(48px,8vw,100px)] leading-[0.95] tracking-[-3px] mb-6">
+          <span className="text-white">Quiz battles.</span><br />
+          <span className="bg-gradient-to-r from-violet-400 to-purple-500 bg-clip-text text-transparent">AI-generated.</span><br />
+          <span className="bg-gradient-to-r from-rose-400 to-pink-500 bg-clip-text text-transparent">Epic vibes.</span>
         </h1>
 
-        <p className="hero-sub">
+        {/* Sub */}
+        <p className="anim-fade-up-2 text-white/45 text-lg md:text-xl max-w-[500px] leading-relaxed font-light mb-10">
           Generate any quiz in seconds, invite your crew, and fight for the crown in real-time multiplayer arenas.
         </p>
 
-        <div className="hero-actions">
-          <button className="btn-primary" onClick={authUser ? goToPlay : goToAuthPortal} disabled={authLoading}>
-            {authUser ? 'Continue to Arena' : "Play now — it's free"}
+        {/* CTAs */}
+        <div className="anim-fade-up-3 flex flex-wrap gap-3 justify-center mb-16">
+          <button
+            onClick={authUser ? goToPlay : goToAuthPortal}
+            disabled={authLoading}
+            className="group relative px-8 py-4 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 text-white font-semibold text-[15px] transition-all hover:-translate-y-1 hover:shadow-[0_0_40px_rgba(139,92,246,0.5)] active:translate-y-0 disabled:opacity-50"
+          >
+            <span className="relative z-10">{authUser ? '🎮 Continue to Arena' : "⚡ Play now — it's free"}</span>
           </button>
-          <button className="btn-ghost" onClick={goToPlay}>Join as guest</button>
+          <button
+            onClick={goToPlay}
+            className="px-8 py-4 rounded-xl border border-white/10 text-white/70 font-semibold text-[15px] bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/20 hover:text-white transition-all hover:-translate-y-1 active:translate-y-0"
+          >
+            Join as guest
+          </button>
         </div>
 
-        <div className="hero-meta">
-          <div className="meta-item">
-            <div className="meta-num">10+</div>
-            <div className="meta-label">Players</div>
-          </div>
-          <div className="meta-sep" />
-          <div className="meta-item">
-            <div className="meta-num">500+</div>
-            <div className="meta-label">Quizzes played</div>
-          </div>
-          <div className="meta-sep" />
-          <div className="meta-item">
-            <div className="meta-num">&lt;5s</div>
-            <div className="meta-label">To generate</div>
-          </div>
+        {/* Stats */}
+        <div className="anim-fade-up-4 flex items-center gap-8 md:gap-12">
+          {[
+            { num: '10+', label: 'Players' },
+            { num: '500+', label: 'Quizzes played' },
+            { num: '<5s', label: 'To generate' },
+          ].map((s, i) => (
+            <React.Fragment key={s.label}>
+              {i > 0 && <div className="w-px h-8 bg-white/[0.08]" />}
+              <div className="text-center">
+                <div className="font-syne font-bold text-2xl text-white">{s.num}</div>
+                <div className="text-[11px] text-white/30 uppercase tracking-widest mt-1">{s.label}</div>
+              </div>
+            </React.Fragment>
+          ))}
+        </div>
+
+        {/* Scroll cue */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 opacity-30">
+          <div className="w-px h-8 bg-white/40" />
+          <span className="text-[10px] tracking-widest uppercase text-white/60">Scroll</span>
         </div>
       </section>
 
-      {/* MARQUEE */}
-      <div className="marquee-wrap">
-        <div className="marquee">{marqueeContent}</div>
+      {/* ── MARQUEE ── */}
+      <div className="overflow-hidden border-y border-white/[0.06] bg-white/[0.02] py-4">
+        <div className="marquee-track flex w-max">
+          {[...MARQUEE_ITEMS, ...MARQUEE_ITEMS].map((item, i) => (
+            <span key={i} className="flex items-center gap-3 px-6 font-syne text-[12px] font-bold tracking-[2px] uppercase text-white/25 whitespace-nowrap">
+              {item}
+              <span className="text-yellow-400/60">✦</span>
+            </span>
+          ))}
+        </div>
       </div>
 
-      {/* FEATURES */}
-      <section id="features" style={{ background: 'var(--ink)' }}>
-        <div className="section">
-          <div className="section-label">Features</div>
-          <div className="section-title">Built for the<br />ultimate battle</div>
-          <div className="section-sub">Everything you need to host legendary quiz nights — straight in your browser.</div>
-          <div className="features-grid">
+      {/* ── FEATURES ── */}
+      <section id="features" className="bg-black py-28 px-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-[11px] tracking-[3px] uppercase text-violet-400 font-semibold mb-4">Features</div>
+          <h2 className="font-syne font-extrabold text-[clamp(32px,5vw,56px)] tracking-tight text-white leading-tight mb-4">
+            Built for the<br />ultimate battle
+          </h2>
+          <p className="text-white/40 text-lg font-light mb-16 max-w-md">
+            Everything you need to host legendary quiz nights — straight in your browser.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-white/[0.06] rounded-2xl overflow-hidden border border-white/[0.06]">
             {features.map((f) => (
-              <div key={f.num} className="feat-card">
-                <div className="feat-num">{f.num}</div>
-                <div className="feat-title">{f.title}</div>
-                <div className="feat-desc">{f.desc}</div>
+              <div
+                key={f.num}
+                className="feat-card group relative bg-[#080810] p-8 hover:bg-[#0d0d1a] transition-colors"
+              >
+                <div className={`feat-num-text font-syne text-[11px] font-bold tracking-[2px] uppercase text-white/20 mb-5 transition-all`}>
+                  {f.num}
+                </div>
+                <div className="font-syne font-bold text-[17px] text-white mb-3">{f.title}</div>
+                <div className="text-[14px] text-white/40 leading-relaxed font-light">{f.desc}</div>
+                <div className={`absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r ${f.accent} opacity-0 group-hover:opacity-100 transition-opacity`} />
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* HOW IT WORKS */}
-      <section id="how" className="steps-section">
-        <div className="steps-inner">
-          <div className="section-label">How it works</div>
-          <div className="section-title">Four steps to<br />glory</div>
-          <div className="steps-grid">
+      {/* ── HOW IT WORKS ── */}
+      <section id="how" className="bg-[#06060e] border-y border-white/[0.05] py-28 px-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-[11px] tracking-[3px] uppercase text-rose-400 font-semibold mb-4">How it works</div>
+          <h2 className="font-syne font-extrabold text-[clamp(32px,5vw,56px)] tracking-tight text-white leading-tight mb-16">
+            Four steps to<br />glory
+          </h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
             {steps.map((s, i) => (
-              <div key={i} className="step-card">
-                <div className="step-num">{i + 1}</div>
-                <div className="step-title">{s.title}</div>
-                <div className="step-desc">{s.desc}</div>
+              <div key={i} className="group relative">
+                {/* Connector line (desktop) */}
+                {i < steps.length - 1 && (
+                  <div className="hidden lg:block absolute top-6 left-full w-full h-px bg-gradient-to-r from-white/10 to-transparent z-0" style={{ width: 'calc(100% - 48px)', left: '48px' }} />
+                )}
+                <div className="relative z-10">
+                  <div className="w-12 h-12 rounded-xl border border-white/10 bg-white/[0.04] flex items-center justify-center text-xl mb-5 group-hover:border-violet-500/40 group-hover:bg-violet-500/10 transition-all">
+                    {s.icon}
+                  </div>
+                  <div className="text-[11px] font-bold tracking-widest text-white/20 uppercase mb-2 font-syne">Step {i + 1}</div>
+                  <div className="font-syne font-bold text-[16px] text-white mb-2">{s.title}</div>
+                  <div className="text-[13px] text-white/40 leading-relaxed font-light">{s.desc}</div>
+                </div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ARENA SHOWCASE */}
-      <section id="arena" style={{ background: 'var(--ink)' }}>
-        <div className="section">
-          <div className="section-label">The Arena</div>
-          <div className="section-title">Three moments<br />that hit different</div>
-          <div className="showcase-grid">
+      {/* ── ARENA SHOWCASE ── */}
+      <section id="arena" className="bg-black py-28 px-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-[11px] tracking-[3px] uppercase text-amber-400 font-semibold mb-4">The Arena</div>
+          <h2 className="font-syne font-extrabold text-[clamp(32px,5vw,56px)] tracking-tight text-white leading-tight mb-16">
+            Three moments<br />that hit different
+          </h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {showcase.map((s, i) => (
-              <div key={i} className="show-card">
-                <div className="show-top">
-                  <div className={`show-icon-wrap ${s.color}`}>{s.icon}</div>
-                  <div className="show-title">{s.title}</div>
-                  <div className="show-desc">{s.desc}</div>
+              <div
+                key={i}
+                className={`group relative rounded-2xl border ${s.border} bg-white/[0.03] hover:bg-white/[0.05] transition-all hover:-translate-y-1 hover:shadow-xl ${s.glow} overflow-hidden`}
+              >
+                <div className="p-7">
+                  <div className="text-3xl mb-5">{s.icon}</div>
+                  <div className="font-syne font-bold text-[20px] text-white mb-3">{s.title}</div>
+                  <div className="text-[14px] text-white/40 leading-relaxed font-light">{s.desc}</div>
                 </div>
-                <div className="show-bottom">
-                  <div className="show-dot" />
-                  {s.tag}
+                <div className={`px-7 py-3 border-t border-white/[0.06] flex items-center gap-2`}>
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]" />
+                  <span className={`text-[11px] font-semibold tracking-wider uppercase ${s.badge.split(' ')[1]}`}>
+                    {s.tag}
+                  </span>
                 </div>
               </div>
             ))}
@@ -532,32 +451,62 @@ const App: React.FC = () => {
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="cta-section">
-        <div className="cta-bg"><div className="cta-blob" /></div>
-        <div className="cta-title">Ready to<br />enter the arena?</div>
-        <div className="cta-sub">Free forever. No download. Just pure competitive fun.</div>
-        <div className="cta-actions">
-          <button className="btn-primary" onClick={authUser ? goToPlay : goToAuthPortal} disabled={authLoading}>
-            {authUser ? 'Continue to Arena' : 'Start playing now'}
-          </button>
-          <button className="btn-ghost" onClick={goToPlay}>Join as guest</button>
+      {/* ── CTA ── */}
+      <section className="relative overflow-hidden bg-[#06060e] border-t border-white/[0.05] py-32 px-6 text-center">
+        {/* Background glow */}
+        <div className="absolute w-[700px] h-[300px] rounded-full bg-violet-700/10 blur-[120px] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+        <div className="absolute w-[400px] h-[200px] rounded-full bg-rose-600/08 blur-[100px] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+
+        <div className="relative z-10">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-white/40 text-[11px] font-semibold tracking-widest uppercase mb-8">
+            <span className="ticker-dot w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]" />
+            Free forever
+          </div>
+
+          <h2 className="font-syne font-extrabold text-[clamp(40px,6vw,72px)] tracking-tight leading-[0.95] text-white mb-6">
+            Ready to<br />
+            <span className="bg-gradient-to-r from-violet-400 via-purple-400 to-rose-400 bg-clip-text text-transparent">
+              enter the arena?
+            </span>
+          </h2>
+          <p className="text-white/35 text-lg mb-10 font-light">
+            Free forever. No download. Just pure competitive fun.
+          </p>
+
+          <div className="flex flex-wrap gap-3 justify-center">
+            <button
+              onClick={authUser ? goToPlay : goToAuthPortal}
+              disabled={authLoading}
+              className="px-10 py-4 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 text-white font-semibold text-[15px] transition-all hover:-translate-y-1 hover:shadow-[0_0_50px_rgba(139,92,246,0.5)] active:translate-y-0 disabled:opacity-50"
+            >
+              {authUser ? '🎮 Continue to Arena' : '⚡ Start playing now'}
+            </button>
+            <button
+              onClick={goToPlay}
+              className="px-10 py-4 rounded-xl border border-white/10 text-white/60 font-semibold text-[15px] bg-white/[0.04] hover:bg-white/[0.08] hover:text-white hover:border-white/20 transition-all hover:-translate-y-1 active:translate-y-0"
+            >
+              Join as guest
+            </button>
+          </div>
         </div>
       </section>
 
-      {/* FOOTER */}
-      <footer className="footer">
-        <div className="footer-logo">
-          <div className="logo-dot" />
-          QuizArena
+      {/* ── FOOTER ── */}
+      <footer className="bg-black border-t border-white/[0.06] px-6 md:px-10 py-10 flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="font-syne font-extrabold text-[17px] flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-yellow-400 shadow-[0_0_8px_#facc15]" />
+          <span className="text-white">Quiz</span><span className="text-rose-500">Arena</span>
         </div>
-        <div className="footer-links">
-          <a href="#">Features</a>
-          <a href="#">About</a>
-          <a href="#">Privacy</a>
-          <a href="#">Terms</a>
+
+        <div className="flex flex-wrap gap-6 justify-center">
+          {['Features', 'About', 'Privacy', 'Terms'].map(link => (
+            <a key={link} href="#" className="text-[13px] text-white/30 hover:text-white/70 transition-colors">
+              {link}
+            </a>
+          ))}
         </div>
-        <div className="footer-copy">Made with ❤️ from annu</div>
+
+        <div className="text-[13px] text-white/25">Made with ❤️ from annu</div>
       </footer>
     </>
   );

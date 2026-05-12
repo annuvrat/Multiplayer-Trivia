@@ -1,0 +1,55 @@
+version: "3.8"
+
+services:
+  # Valkey Cache
+  valkey:
+    image: valkey/valkey:latest
+    command: valkey-server --appendonly yes
+
+    ports:
+      - "${VALKEY_PORT:-6379}:6379"
+
+    volumes:
+      - valkey_data:/data
+
+    networks:
+      - quiz-arena-network
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Backend Service
+  backend:
+    image: annuvrat/quiz-arena-backend:latest
+
+    depends_on:
+      valkey:
+        condition: service_healthy
+
+    env_file:
+      - backend.env
+
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+
+    ports:
+      - "${BACKEND_PORT:-5000}:5000"
+
+    networks:
+      - quiz-arena-network
+
+    restart: unless-stopped
+
+networks:
+  quiz-arena-network:
+    driver: bridge
+
+volumes:
+  valkey_data:

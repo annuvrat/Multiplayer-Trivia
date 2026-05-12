@@ -12,6 +12,9 @@ const router = Router()
 router.get("/google/session", requireFirebaseAuth, getGoogleSession)
 router.post("/google/refresh", requireFirebaseAuth, refreshGoogleSession)
 router.post("/google/signout", requireFirebaseAuth, signOutGoogleSession)
+router.get("/session", requireFirebaseAuth, getGoogleSession)
+router.post("/refresh", requireFirebaseAuth, refreshGoogleSession)
+router.post("/signout", requireFirebaseAuth, signOutGoogleSession)
 router.get("/me/matches", requireFirebaseAuth, getMyMatches)
 
 export default router

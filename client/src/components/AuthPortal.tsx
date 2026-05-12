@@ -6,10 +6,10 @@ import {
   signInWithGooglePopup,
   type FirebaseGoogleUser,
 } from "../firebase/FireBase";
+import { API_BASE_URL } from "../config/apiBase";
 
 const AUTH_USER_STORAGE_KEY = "quizme-google-user";
 const AUTH_TOKEN_STORAGE_KEY = "quizme-google-token";
-const BACKEND_AUTH_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 function sanitizeNextPath(rawNext: string | null): string {
   if (!rawNext) return "/play";
@@ -149,7 +149,7 @@ export default function AuthPortal() {
   }, []);
 
   const verifyWithBackend = async (token: string) => {
-    const authRes = await fetch(`${BACKEND_AUTH_BASE_URL}/auth/google/session`, {
+    const authRes = await fetch(`${API_BASE_URL}/auth/session`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,

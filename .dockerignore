@@ -1,0 +1,46 @@
+// #Dependencies
+node_modules
+
+// #Logs
+npm-debug.log
+// *.log
+
+// #Git
+.git
+.gitignore
+.gitattributes
+
+// #Envfiles(don't copy to image)
+.env
+.env.local
+// .env.*.local
+.env.docker.example
+
+// # IDE
+.vscode
+.idea
+.DS_Store
+
+// # Build outputs
+dist
+build
+coverage
+.turbo
+
+// # Client app (handled separately)
+client
+
+// # Database & docs
+sql
+prisma/migrations
+docs
+
+// # CI/CD
+.github
+.gitlab-ci.yml
+
+// # Other
+README.md
+DOCKER.md
+.dockerignore
+Dockerfile

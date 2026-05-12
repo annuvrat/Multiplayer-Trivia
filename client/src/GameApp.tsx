@@ -17,8 +17,8 @@ import { Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { parseQuizSnapshot, type ReplayQuestion } from "./utils/quizSnapshot";
 import type { TeamsSnapshot } from "./types/teams";
+import { API_BASE_URL } from "./config/apiBase";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 const AUTH_TOKEN_STORAGE_KEY = "quizme-google-token";
 const AUTH_USER_STORAGE_KEY = "quizme-google-user";
 const MATCH_HISTORY_STORAGE_KEY = "quizme-match-history";

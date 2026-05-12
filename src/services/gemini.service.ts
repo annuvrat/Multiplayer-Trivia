@@ -1,23 +1,19 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import OpenAI from "openai";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-// Get API Key from environment
-const apiKey = process.env.GEMINI_API_KEY || "";
+// Get API Key from environment (now using GROQ)
+const apiKey = process.env.GROQ_API_KEY || "";
 
 if (!apiKey) {
-  console.error("❌ GEMINI_API_KEY is missing in .env");
+  console.error("❌ GROQ_API_KEY is missing in .env");
 }
 
-const genAI = new GoogleGenerativeAI(apiKey);
-const model = genAI.getGenerativeModel({
-  model: "gemini-2.0-flash",
-  generationConfig: {
-    temperature: 0.3,
-    topP: 0.8,
-    maxOutputTokens: 2048,
-  }
+// Initialize Groq client (OpenAI-compatible)
+const client = new OpenAI({
+  apiKey: apiKey,
+  baseURL: "https://api.groq.com/openai/v1",
 });
 
 export const generateQuestions = async (
@@ -39,9 +35,25 @@ export const generateQuestions = async (
   where 'answer' is the index of the correct option (0-3).`;
 
   try {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const textResponse = response.text().trim();
+    const result = await client.chat.completions.create({
+      model: "llama-3.3-70b-versatile", // Groq's model (fast and free)
+      // Alternative Groq models:
+      // "llama3-70b-8192" - Most capable
+      // "llama3-8b-8192" - Faster, still good
+      // "gemma2-9b-it" - Google's model
+      max_tokens: 2048,
+      messages: [
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      temperature: 0.3,
+      top_p: 0.8,
+    });
+
+    const content = result.choices[0]?.message.content;
+    const textResponse = content?.trim() || "";
 
     if (!textResponse) {
       throw new Error("Empty response from AI");
