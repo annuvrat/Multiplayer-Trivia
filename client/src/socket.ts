@@ -1,7 +1,7 @@
 
 import { io } from "socket.io-client"
 
-const Url = "https://extrorse-kimber-dulcetly.ngrok-free.dev"
+const Url = "https://quiz.annuvrat.com"
 
 export const socket = io(Url, {
     autoConnect: false,

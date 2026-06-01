@@ -153,6 +153,7 @@ export default function AuthPortal() {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
+        "ngrok-skip-browser-warning": "69420", // Bypasses the free ngrok warning screen
       },
     });
 
