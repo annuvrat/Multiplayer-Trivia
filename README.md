@@ -4,7 +4,7 @@
 
 QuizArena is a modern multiplayer trivia game where players join rooms (arenas), generate custom quiz questions via AI (Groq/Llama), and compete in real-time quiz battles. Supports **Free-for-All** and **Team Deathmatch** modes with live leaderboards, lobby chat, and match replay.
 
-**Deployed Link :**| quizme.annuvrat.com
+**Deployed Link :** https://quizme.annuvrat.com
 ---
 
 ## Features
